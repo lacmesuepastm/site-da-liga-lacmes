@@ -1,0 +1,146 @@
+rules_version = '2';
+// ============================================================================
+// REGRAS DE SEGURANÇA DO FIRESTORE — LACMES
+// Publique com:  firebase deploy --only firestore:rules
+// (ou cole no Console → Firestore → Regras → Publicar)
+// ============================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logado() { return request.auth != null; }
+    function caminhoEu() { return /databases/$(database)/documents/usuarios/$(request.auth.uid); }
+    function eu() { return get(caminhoEu()).data; }
+    function ativo() { return logado() && exists(caminhoEu()) && eu().get('ativo', true) != false; }
+    function admin() { return ativo() && eu().tipo == 'admin'; }
+    function orientador() { return ativo() && eu().tipo == 'orientador'; }
+    function cargo() { return eu().get('cargo', null); }
+    function diretor() { return admin() || (ativo() && cargo() != null); }
+    function temCargo(c) { return ativo() && cargo() == c; }
+    function inicializado() { return exists(/databases/$(database)/documents/config/publico); }
+    function soMudou(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
+    // a lista `campo` só ganhou/perdeu o próprio usuário
+    function soEuNaLista(campo) {
+      let novo = request.resource.data.get(campo, []).toSet();
+      let velho = resource.data.get(campo, []).toSet();
+      return novo.difference(velho).hasOnly([request.auth.uid]) && velho.difference(novo).hasOnly([request.auth.uid]);
+    }
+
+    // ------------------------------------------------------------ CONFIG ----
+    match /config/publico {
+      allow read: if true;
+      allow create: if logado() && (!inicializado() || admin());
+      allow update, delete: if admin();
+    }
+    match /config/{doc} {
+      allow read: if ativo();
+      allow write: if admin();
+    }
+
+    // ----------------------------------------------------------- USUÁRIOS ----
+    match /usuarios/{uid} {
+      allow read: if ativo() || (logado() && request.auth.uid == uid);
+      // primeiro acesso (portal sem configuração) ou cadastro feito pela Presidência
+      allow create: if admin() || (logado() && request.auth.uid == uid && !inicializado());
+      allow update: if admin() || (ativo() && request.auth.uid == uid && soMudou(['foto', 'titulacao', 'vinculo', 'eixosSeguidos', 'notifPrefs']));
+      allow delete: if admin();
+
+      match /notificacoes/{n} {
+        allow read, update, delete: if logado() && request.auth.uid == uid;
+        allow create: if ativo();
+      }
+      match /eventos/{e} {
+        allow read, write: if logado() && request.auth.uid == uid;
+      }
+    }
+    match /logins/{username} {
+      allow read: if true;                // necessário para entrar com "usuário" em vez de e-mail
+      allow write: if admin();
+    }
+    match /tokens/{uid} {
+      allow read, write: if logado() && request.auth.uid == uid;
+    }
+    match /assinaturas/{uid} {
+      allow read: if admin() || orientador();
+      allow write: if (admin() || orientador()) && request.auth.uid == uid;
+    }
+
+    // ----------------------------------------------------------- PROJETOS ----
+    match /projetos/{pid} {
+      allow read: if ativo();
+      allow create: if diretor();
+      allow update: if diretor()
+        || (ativo() && request.auth.uid in resource.data.get('membroIds', []))
+        || (ativo() && resource.data.get('orientadorUid', null) == request.auth.uid);
+      allow delete: if diretor();
+
+      match /mensagens/{m} {
+        allow read: if ativo();
+        allow create: if ativo() && request.resource.data.autor == request.auth.uid;
+        allow delete: if admin() || (logado() && resource.data.autor == request.auth.uid);
+      }
+    }
+
+    // -------------------------------------------------------------- FÓRUM ----
+    match /forum/{id} {
+      allow read: if ativo();
+      allow create: if diretor() && request.resource.data.autor == request.auth.uid;
+      allow update: if admin() || (ativo() && resource.data.autor == request.auth.uid)
+        || (ativo() && soMudou(['nComentarios', 'ultimoComentario']));
+      allow delete: if admin() || (ativo() && resource.data.autor == request.auth.uid);
+
+      match /comentarios/{c} {
+        allow read: if ativo();
+        allow create: if ativo() && request.resource.data.autor == request.auth.uid;
+        allow update: if (ativo() && resource.data.autor == request.auth.uid) || (ativo() && soMudou(['curtidas']));
+        allow delete: if admin() || (ativo() && resource.data.autor == request.auth.uid)
+          || (ativo() && get(/databases/$(database)/documents/forum/$(id)).data.autor == request.auth.uid);
+      }
+      match /votos/{uid} {
+        allow read: if ativo();
+        allow write: if ativo() && request.auth.uid == uid;
+        allow delete: if admin() || (ativo() && get(/databases/$(database)/documents/forum/$(id)).data.autor == request.auth.uid);
+      }
+    }
+
+    // ------------------------------------------------------ OPORTUNIDADES ----
+    match /oportunidades/{id} {
+      allow read: if ativo();
+      allow create, delete: if diretor();
+      allow update: if diretor() || (ativo() && soMudou(['inscritos']) && soEuNaLista('inscritos'));
+    }
+
+    // -------------------------------------------------------------- AULAS ----
+    match /aulas/{id} {
+      allow read: if ativo();
+      allow create, delete: if admin() || temCargo('Diretor de Ensino');
+      allow update: if admin() || temCargo('Diretor de Ensino') || (ativo() && soMudou(['seguidores']) && soEuNaLista('seguidores'));
+    }
+
+    // ------------------------------------------------ FINANCEIRO E ATAS ----
+    match /financeiro/{id} {
+      allow read: if ativo();
+      allow write: if admin() || temCargo('Diretor Financeiro');
+    }
+    match /atas/{id} {
+      allow read: if diretor();
+      allow write: if admin() || temCargo('Vice-presidente e Secretário');
+    }
+
+    // ------------------------------------------------------- CERTIFICADOS ----
+    match /certificados/{id} {
+      allow read: if admin() || (ativo() && (resource.data.userId == request.auth.uid || resource.data.get('signerUid', null) == request.auth.uid));
+      allow create: if diretor();
+      allow update: if admin() || (orientador() && resource.data.get('signerUid', null) == request.auth.uid);
+      allow delete: if admin();
+    }
+    match /certificados_pdf/{id} {
+      allow read: if admin() || orientador()
+        || (ativo() && get(/databases/$(database)/documents/certificados/$(id)).data.userId == request.auth.uid);
+      allow write: if admin() || orientador();
+    }
+    match /verificacoes/{codigo} {
+      allow read: if true;                // página pública verificar.html
+      allow write: if admin() || orientador();
+    }
+  }
+}

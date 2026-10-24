@@ -1,0 +1,26 @@
+# Cloudflare Worker da LACMES — veja README.md, seção "Cloudflare Worker"
+name = "lacmes-api"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# Domínio próprio do Worker (descomente depois de colocar o domínio no Cloudflare)
+# routes = [{ pattern = "api.SEU-DOMINIO.com.br", custom_domain = true }]
+
+[vars]
+# Sites que podem chamar a API (separados por vírgula)
+ALLOWED_ORIGINS = "https://lacmesuepastm.github.io,https://SEU-DOMINIO.com.br,https://www.SEU-DOMINIO.com.br"
+# Endereço público do Worker (usado nos links dos arquivos). Ex.: https://api.SEU-DOMINIO.com.br
+PUBLIC_URL = ""
+
+# Lembretes da véspera: todo dia às 21:00 UTC (18:00 em Santarém)
+[triggers]
+crons = ["0 21 * * *"]
+
+# Armazenamento de arquivos (imagens, PDFs, certificados) — crie com:
+#   npx wrangler r2 bucket create lacmes-arquivos
+[[r2_buckets]]
+binding = "ARQUIVOS"
+bucket_name = "lacmes-arquivos"
+
+# Segredo obrigatório (NÃO coloque aqui):
+#   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT

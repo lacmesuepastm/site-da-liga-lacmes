@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verificar certificado · LACMES</title>
+  <meta name="theme-color" content="#163A5C">
+  <link rel="icon" type="image/png" href="assets/icons/favicon-32.png">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+  <style>
+    body { display: grid; place-items: center; min-height: 100vh; padding: 24px 16px; }
+    .ver { width: 100%; max-width: 460px; text-align: center; }
+    .ver img { width: 80px; } .ver h1 { font-size: 20px; letter-spacing: .1em; margin: 10px 0 2px; }
+    .ver form { display: flex; gap: 8px; margin: 20px 0; } .ver form input { flex: 1; height: 42px; border: 1px solid var(--line-2); border-radius: 8px; padding: 0 12px; text-transform: uppercase; font-family: ui-monospace, monospace; }
+    .res { text-align: left; animation: subir .4s; } .res dl { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; margin: 14px 0 0; } .res dt { color: var(--ink-3); font-size: 12px; } .res dd { margin: 0; font-weight: 500; }
+    .selo { display: flex; align-items: center; gap: 10px; font-weight: 600; } .selo.ok { color: var(--ok); } .selo.nao { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <main class="ver">
+    <img src="assets/logo-lacmes.png" alt="LACMES">
+    <h1>LACMES</h1>
+    <p class="mudo">Verificação de autenticidade de certificados</p>
+    <form id="f"><input id="c" placeholder="LAC-XXXX-XXXX" aria-label="Código" required><button class="btn btn-pri">Verificar</button></form>
+    <div id="r"></div>
+  </main>
+  <script type="module">
+    import { FIREBASE_CONFIG, DEMO_MODE } from './js/config.js';
+    const r = document.getElementById('r'), campo = document.getElementById('c');
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    async function buscar(codigo) {
+      if (DEMO_MODE) { const db = JSON.parse(localStorage.getItem('lacmes-demo-db-v2') || '{}'); return (db.verificacoes || {})[codigo] || null; }
+      const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+      const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      const s = await getDoc(doc(getFirestore(initializeApp(FIREBASE_CONFIG)), 'verificacoes', codigo));
+      return s.exists() ? s.data() : null;
+    }
+    async function verificar(codigo) {
+      codigo = codigo.trim().toUpperCase(); if (!codigo) return;
+      r.innerHTML = '<p class="mudo">Consultando…</p>';
+      try {
+        const d = await buscar(codigo);
+        r.innerHTML = d && d.status === 'valido' ? `<div class="card res"><div class="selo ok">✓ Certificado autêntico</div><dl>
+          <dt>Nome</dt><dd>${esc(d.nome)}</dd><dt>Certificado</dt><dd>${esc(d.titulo)}</dd><dt>Carga horária</dt><dd>${esc(d.cargaHoraria)} horas</dd>
+          <dt>Emitido em</dt><dd>${new Date(d.emitidoEm).toLocaleDateString('pt-BR')}</dd>${d.presidente ? `<dt>Presidência</dt><dd>${esc(d.presidente)}</dd>` : ''}${d.orientador ? `<dt>Orientação</dt><dd>${esc(d.orientador)}</dd>` : ''}<dt>Código</dt><dd><code>${esc(codigo)}</code></dd></dl></div>`
+          : `<div class="card res"><div class="selo nao">✕ Código não encontrado</div><p class="mudo" style="margin-top:8px">Confira se digitou corretamente. Em caso de dúvida, contate a LACMES.</p></div>`;
+      } catch (e) { r.innerHTML = `<p class="txt-perigo">Erro na consulta: ${esc(e.message)}</p>`; }
+    }
+    document.getElementById('f').addEventListener('submit', (e) => { e.preventDefault(); verificar(campo.value); });
+    const q = new URLSearchParams(location.search).get('c'); if (q) { campo.value = q; verificar(q); }
+  </script>
+</body>
+</html>

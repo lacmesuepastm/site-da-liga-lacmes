@@ -1,0 +1,23 @@
+{
+  "name": "LACMES — Liga Acadêmica de Clínica Médica de Santarém",
+  "short_name": "LACMES",
+  "description": "Fórum, casos clínicos, projetos, estágios, aulas e certificados da LACMES.",
+  "lang": "pt-BR",
+  "start_url": "./index.html#/inicio",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#fafbfc",
+  "theme_color": "#163A5C",
+  "categories": ["education", "medical"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Fórum", "url": "./index.html#/forum", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Agenda", "url": "./index.html#/agenda", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Oportunidades", "url": "./index.html#/oportunidades", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
