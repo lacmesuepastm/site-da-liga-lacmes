@@ -1,7 +1,7 @@
 {
-  "name": "LACMES — Liga Acadêmica de Clínica Médica de Santarém",
+  "name": "LACMES | Liga Acadêmica de Clínica Médica de Santarém",
   "short_name": "LACMES",
-  "description": "Fórum, casos clínicos, projetos, estágios, aulas e certificados da LACMES.",
+  "description": "Site da Liga Acadêmica de Clínica Médica",
   "lang": "pt-BR",
   "start_url": "./index.html#/inicio",
   "scope": "./",
