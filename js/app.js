@@ -79,6 +79,8 @@ function restaurar(view, est) {
   }
 }
 
+let ultimoHtml = '';
+
 export function renderizar(mudouRota) {
   if (!S.eu) return;
   const [id, params] = lerRota();
@@ -88,18 +90,20 @@ export function renderizar(mudouRota) {
   const view = $('#view');
   if (!podeVer(id)) { location.hash = '#/inicio'; return; }
   const pg = PAGINAS[id];
-  const est = trocou ? null : capturar(view);
-  try {
-    view.innerHTML = pg.render(params);
-  } catch (e) {
+  let html;
+  try { html = pg.render(params); }
+  catch (e) {
     console.error(e);
-    view.innerHTML = `<div class="vazio">${ic('alerta')}<p>Erro ao montar esta página: ${esc(e.message)}</p></div>`;
+    html = `<div class="vazio">${ic('alerta')}<p>Erro ao montar esta página: ${esc(e.message)}</p></div>`;
   }
+  if (!trocou && html === ultimoHtml) { desenharMenu(); return; }
+  ultimoHtml = html;
+  const est = trocou ? null : capturar(view);
+  view.innerHTML = html;
   if (trocou) {
-    view.classList.remove('entrar'); void view.offsetWidth; view.classList.add('entrar');
     document.querySelector('.principal').scrollTop = 0;
     view.querySelectorAll('[data-rolagem]').forEach(el => { el.scrollTop = el.scrollHeight; });
-  } else { view.classList.remove('entrar'); restaurar(view, est); }
+  } else restaurar(view, est);
   try { pg.montar && pg.montar(view, params, trocou); } catch (e) { console.error(e); }
   desenharMenu();
   $('#titulo-pagina').textContent = (pg.tituloDinamico && pg.tituloDinamico(params)) || pg.titulo;
