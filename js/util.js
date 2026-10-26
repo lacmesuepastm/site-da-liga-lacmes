@@ -190,7 +190,7 @@ export function toast(msg, tipo = 'info', ms = 3200) {
   t.className = `toast toast-${tipo}`;
   t.innerHTML = `${ic(tipo === 'erro' ? 'alerta' : (tipo === 'ok' ? 'concluido' : 'info'))}<span>${esc(msg)}</span>`;
   box.appendChild(t);
-  setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 300); }, ms);
+  setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 250); }, ms);
 }
 
 let modalAtual = null;
@@ -203,7 +203,8 @@ export function abrirModal({ titulo, corpo, largura = 520, aoFechar } = {}) {
     <div class="modal-corpo">${corpo}</div></div>`;
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) fecharModal(); });
   document.body.appendChild(ov);
-  requestAnimationFrame(() => ov.classList.add('aberto'));
+  void ov.offsetWidth;
+  ov.classList.add('aberto');
   modalAtual = { ov, aoFechar };
   const primeiro = ov.querySelector('input:not([type=hidden]):not([type=checkbox]), textarea, [contenteditable]');
   primeiro && setTimeout(() => primeiro.focus(), 60);
@@ -214,7 +215,7 @@ export function fecharModal(imediato) {
   const { ov, aoFechar } = modalAtual; modalAtual = null;
   aoFechar && aoFechar();
   if (imediato === true) { ov.remove(); return; }
-  ov.classList.remove('aberto'); setTimeout(() => ov.remove(), 220);
+  ov.classList.remove('aberto'); setTimeout(() => ov.remove(), 300);
 }
 export const modalAberto = () => !!modalAtual;
 acao('fecharModal', () => fecharModal());
@@ -227,7 +228,8 @@ export function confirmar(msg, { ok = 'Confirmar', perigo = false } = {}) {
     ov.innerHTML = `<div class="modal modal-confirm"><div class="modal-corpo"><p>${esc(msg)}</p>
       <div class="acoes-form"><button class="btn" data-r="0">Cancelar</button><button class="btn ${perigo ? 'btn-perigo' : 'btn-pri'}" data-r="1">${esc(ok)}</button></div></div></div>`;
     document.body.appendChild(ov);
-    requestAnimationFrame(() => ov.classList.add('aberto'));
+    void ov.offsetWidth;
+    ov.classList.add('aberto');
     ov.addEventListener('click', (e) => {
       const b = e.target.closest('[data-r]');
       if (b || e.target === ov) { e.stopPropagation(); ov.classList.remove('aberto'); setTimeout(() => ov.remove(), 200); resolve(!!b && b.dataset.r === '1'); }
