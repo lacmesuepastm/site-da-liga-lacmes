@@ -1,4 +1,4 @@
-const VERSAO = 'lacmes-v1.2.0';
+﻿const VERSAO = 'lacmes-v1.2.1';
 const BASE = self.registration.scope;
 const ESSENCIAIS = [
   '', 'index.html', 'verificar.html', 'manifest.webmanifest', 'css/app.css',
