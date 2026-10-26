@@ -1,14 +1,5 @@
-// ============================================================================
-// CAMADA DE DADOS — uma única API usada pelo site inteiro, com dois "motores":
-//   • Firebase (Auth + Firestore em tempo real, com cache offline)
-//   • Demonstração (localStorage + sincronização entre abas), quando o
-//     config.js ainda não foi preenchido.
-// Caminhos seguem o Firestore: "colecao", "colecao/id", "colecao/id/sub".
-// Datas/horários são guardados como números (Date.now()) ou "AAAA-MM-DD".
-// ============================================================================
-import { FIREBASE_CONFIG, DEMO_MODE } from './config.js';
+import { FIREBASE_CONFIG, DEMO_MODE, WORKER_URL } from './config.js';
 
-// Operações especiais de campo (funcionam nos dois motores)
 export const F = {
   arrayUnion: (...values) => ({ __op: 'arrayUnion', values }),
   arrayRemove: (...values) => ({ __op: 'arrayRemove', values }),
@@ -17,7 +8,6 @@ export const F = {
 };
 const isOp = (v) => v && typeof v === 'object' && typeof v.__op === 'string';
 
-// Indicador de sincronização
 const syncListeners = new Set();
 let pendentes = 0;
 function notificarSync() {
@@ -31,9 +21,6 @@ async function rastrear(promise) {
   try { return await promise; } finally { pendentes--; notificarSync(); }
 }
 
-// ----------------------------------------------------------------------------
-// MOTOR DEMONSTRAÇÃO
-// ----------------------------------------------------------------------------
 function criarMotorDemo() {
   const CHAVE = 'lacmes-demo-db-v2';
   const canal = 'BroadcastChannel' in window ? new BroadcastChannel('lacmes-demo') : null;
@@ -151,7 +138,6 @@ function criarMotorDemo() {
         else if (op.tipo === 'del') await motor.del(op.path);
       }
     },
-    // --- autenticação simulada ---
     auth: {
       onChange(cb) {
         authCbs.add(cb);
@@ -190,19 +176,21 @@ function criarMotorDemo() {
         if (mapa[usuarioAtual.uid] !== atual) throw new Error('auth/wrong-password');
         mapa[usuarioAtual.uid] = nova; persistir();
       },
+      async adminAtualizar(uid, { senha }) {
+        if (!senha) return;
+        store._demo_senhas = store._demo_senhas || {};
+        store._demo_senhas.mapa = { ...(store._demo_senhas.mapa || {}), [uid]: senha };
+        persistir();
+      },
       async token() { return 'demo'; },
       atual: () => usuarioAtual
     },
-    // usado para popular os dados de exemplo
     _resetar(dados) { store = dados; persistir(); dispararTodos(); },
     _vazio() { return !store.usuarios || Object.keys(store.usuarios).length === 0; }
   };
   return motor;
 }
 
-// ----------------------------------------------------------------------------
-// MOTOR FIREBASE
-// ----------------------------------------------------------------------------
 const V = '10.14.1';
 const CDN = `https://www.gstatic.com/firebasejs/${V}`;
 
@@ -260,7 +248,6 @@ function criarMotorFirebase() {
     update: (path, parcial) => rastrear(fb.fs.updateDoc(ref(path), converter(parcial))),
     del: (path) => rastrear(fb.fs.deleteDoc(ref(path))),
     async batch(ops) {
-      // o Firestore aceita até 500 operações por lote
       for (let i = 0; i < ops.length; i += 450) {
         const b = fb.fs.writeBatch(db);
         ops.slice(i, i + 450).forEach(op => {
@@ -283,8 +270,6 @@ function criarMotorFirebase() {
         await fb.auth.signInWithEmailAndPassword(auth, email, senha);
       },
       logout: () => fb.auth.signOut(auth),
-      // Cria a conta de OUTRA pessoa sem derrubar a sessão de quem está logado
-      // (usa uma segunda instância do Firebase só para isso).
       async criarConta(email, senha) {
         const sec = fb.app.initializeApp(FIREBASE_CONFIG, 'secundario-' + Date.now());
         try {
@@ -300,6 +285,13 @@ function criarMotorFirebase() {
         const cred = fb.auth.EmailAuthProvider.credential(auth.currentUser.email, atual);
         await fb.auth.reauthenticateWithCredential(auth.currentUser, cred);
         await fb.auth.updatePassword(auth.currentUser, nova);
+      },
+      async adminAtualizar(uid, { email, senha }) {
+        if (!WORKER_URL) throw new Error('Para alterar e-mail ou senha de outra pessoa é preciso publicar o Cloudflare Worker e preencher WORKER_URL em js/config.js.');
+        const token = await auth.currentUser.getIdToken();
+        const r = await fetch(WORKER_URL.replace(/\/$/, '') + '/admin/usuario', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ uid, email, senha }) });
+        const corpo = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(corpo.erro || `Falha (${r.status})`);
       },
       token: () => auth.currentUser ? auth.currentUser.getIdToken() : null,
       atual: () => usuarioAtual

@@ -1,9 +1,6 @@
-// ============================================================================
-// USUÁRIOS (Presidência) e MIGRAÇÃO dos dados do antigo Apps Script/Planilha
-// ============================================================================
 import { Data, op } from '../data.js';
 import { S } from '../store.js';
-import { P, LISTA_CARGOS, TIPOS_USUARIO, cargoBadge, prefsPadrao, eixosChips } from '../dominio.js';
+import { P, LISTA_CARGOS, TIPOS_USUARIO, cargoBadge, prefsPadrao, eixosChips, eixoPicker, lerEixos } from '../dominio.js';
 import { ic, esc, acao, avatar, abrirModal, fecharModal, confirmar, toast, val, opcoes, brParaISO, novoId, rerender } from '../util.js';
 import { cabecalho, vazio, btn, btnIc, campo, linhaCampos } from '../ui.js';
 import { tituloCert } from '../cert.js';
@@ -28,8 +25,11 @@ acao('filtroUsu', ({ v }) => { busca.tipo = v; rerender(); });
 let tB; acao('buscaUsu', (d, el) => { clearTimeout(tB); tB = setTimeout(() => { busca.q = el.value; rerender(); }, 250); });
 
 const formUsu = (u = {}) => `${campo('Nome completo', `<input id="nu-nome" value="${esc(u.nome || '')}">`)}
-  ${linhaCampos(campo('E-mail', `<input type="email" id="nu-email" value="${esc(u.email || '')}" ${u.id ? 'disabled' : ''}>`), campo('Usuário (login rápido)', `<input id="nu-user" value="${esc(u.username || '')}" pattern="[a-z0-9._-]+" ${u.id ? 'disabled' : ''}>`))}
-  ${u.id ? '' : campo('Senha inicial', '<input id="nu-senha" type="text" minlength="6" placeholder="mínimo 6 caracteres">', 'A pessoa pode trocar depois em Meu perfil.')}
+  ${linhaCampos(campo('E-mail', `<input type="email" id="nu-email" value="${esc(u.email || '')}">`), campo('Usuário (login rápido)', `<input id="nu-user" value="${esc(u.username || '')}" pattern="[a-z0-9._-]+">`))}
+  ${u.id
+    ? campo('Nova senha', '<input id="nu-senha" type="text" minlength="6" autocomplete="off" placeholder="deixe em branco para manter a atual">', 'Mudar e-mail ou senha de outra pessoa exige o Cloudflare Worker publicado. Avise a pessoa da mudança.')
+    : campo('Senha inicial', '<input id="nu-senha" type="text" minlength="6" placeholder="mínimo 6 caracteres">', 'A pessoa pode trocar depois em Meu perfil.')}
+  ${campo('Eixos que a pessoa segue', eixoPicker('nu-eixos', u.eixosSeguidos || []))}
   ${linhaCampos(campo('Nível', `<select id="nu-tipo">${opcoes(Object.entries(TIPOS_USUARIO).map(([v, t]) => ({ v, t })), u.tipo || 'usuario')}</select>`), campo('Cargo na diretoria', `<select id="nu-cargo"><option value="">Nenhum (membro)</option>${opcoes(LISTA_CARGOS, u.cargo)}</select>`))}
   ${linhaCampos(campo('Titulação', `<input id="nu-tit" value="${esc(u.titulacao || 'Graduando(a) em Medicina')}">`), campo('Vínculo', `<input id="nu-vinc" value="${esc(u.vinculo || 'Membro')}">`))}`;
 acao('novoUsuario', () => abrirModal({ titulo: 'Novo usuário', largura: 600, corpo: formUsu() + `<div class="acoes-form">${btn('Cancelar', 'fecharModal')}${btn('Cadastrar', 'salvarUsuario', { classe: 'btn-pri', icone: 'check' })}</div>` }));
@@ -37,14 +37,30 @@ acao('editarUsuario', ({ id }) => abrirModal({ titulo: 'Editar usuário', largur
 acao('salvarUsuario', async ({ id }, b) => {
   const base = { nome: val('nu-nome'), tipo: val('nu-tipo'), cargo: val('nu-cargo') || null, titulacao: val('nu-tit'), vinculo: val('nu-vinc') };
   if (!base.nome) { toast('Informe o nome.', 'erro'); return; }
-  if (id) { await Data.update(`usuarios/${id}`, base); fecharModal(); toast('Salvo.', 'ok'); return; }
-  const email = val('nu-email').toLowerCase(), username = val('nu-user').toLowerCase(), senha = val('nu-senha');
-  if (!email || !username || senha.length < 6) { toast('E-mail, usuário e senha (≥ 6) são obrigatórios.', 'erro'); return; }
-  if (Object.values(S.usuarios).some(u => u.username === username)) { toast('Esse usuário já existe.', 'erro'); return; }
+  const email = val('nu-email').toLowerCase(), username = val('nu-user').toLowerCase(), senha = val('nu-senha'), eixos = lerEixos('nu-eixos');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Informe um e-mail válido.', 'erro'); return; }
+  if (!/^[a-z0-9._-]+$/.test(username)) { toast('O usuário só pode ter letras minúsculas, números, ponto, hífen e sublinhado.', 'erro'); return; }
+  if (Object.values(S.usuarios).some(u => u.username === username && u.id !== id)) { toast('Esse usuário já existe.', 'erro'); return; }
+  if (id) {
+    if (senha && senha.length < 6) { toast('A nova senha precisa ter 6+ caracteres.', 'erro'); return; }
+    const antigo = S.usuarios[id];
+    const mudouEmail = email !== (antigo.email || '').toLowerCase(), mudouUser = username !== antigo.username;
+    b.disabled = true;
+    try {
+      if (mudouEmail || senha) await Data.auth.adminAtualizar(id, { email: mudouEmail ? email : undefined, senha: senha || undefined });
+      const ops = [op.update(`usuarios/${id}`, { ...base, email, username, eixosSeguidos: eixos })];
+      if (mudouUser && antigo.username) ops.push(op.del(`logins/${antigo.username}`));
+      if (mudouUser || mudouEmail) ops.push(op.set(`logins/${username}`, { email }));
+      await Data.batch(ops);
+      fecharModal(); toast(senha ? 'Salvo. A nova senha já vale.' : 'Salvo.', 'ok');
+    } catch (e) { b.disabled = false; toast(/email-already|EMAIL_EXISTS/.test(e.code || e.message) ? 'Esse e-mail já pertence a outra conta.' : e.message, 'erro', 7000); }
+    return;
+  }
+  if (senha.length < 6) { toast('A senha inicial precisa ter 6+ caracteres.', 'erro'); return; }
   b.disabled = true;
   try {
     const uid = await Data.auth.criarConta(email, senha);
-    await Data.batch([op.set(`usuarios/${uid}`, { ...base, email, username, foto: '', ativo: true, eixosSeguidos: ['clinica'], notifPrefs: prefsPadrao(), criadoEm: Date.now() }), op.set(`logins/${username}`, { email })]);
+    await Data.batch([op.set(`usuarios/${uid}`, { ...base, email, username, foto: '', ativo: true, eixosSeguidos: eixos, notifPrefs: prefsPadrao(), criadoEm: Date.now() }), op.set(`logins/${username}`, { email })]);
     fecharModal(); toast(`${base.nome} cadastrado(a). Login: ${username}`, 'ok', 5000);
   } catch (e) { b.disabled = false; toast(/email-already/.test(e.code || e.message) ? 'Esse e-mail já tem conta no Firebase.' : 'Erro: ' + (e.code || e.message), 'erro', 6000); }
 });
@@ -55,7 +71,6 @@ acao('ativarUsuario', async ({ id }) => {
   await Data.update(`usuarios/${id}`, { ativo: !desativar });
 });
 
-// ------------------------------------------------------------ MIGRAÇÃO ----
 function renderMigracao() {
   return `<a class="voltar" href="#/usuarios">${ic('voltar')} Usuários</a>${cabecalho('Importar do sistema antigo', 'Traz usuários (com as mesmas senhas), projetos, chats, oportunidades, aulas, mural, financeiro, atas, agendas e certificados do Apps Script.')}
     <div class="card"><ol class="passos">
@@ -65,7 +80,6 @@ function renderMigracao() {
       ${campo('Dados antigos', '<textarea id="mig-json" rows="10" class="mono" placeholder=\'{"usuarios": {...}, "projetos_info": {...}, ...}\'></textarea>')}
       <div class="acoes-linha esq">${btn('Analisar', 'migAnalisar', { icone: 'lupa' })}</div><div id="mig-resultado">${resumoMigracao()}</div></div>`;
 }
-// o resumo e o registro ficam em memória para sobreviver às re-renderizações
 let logMig = '';
 function resumoMigracao() {
   if (!antigo) return '';
@@ -80,7 +94,12 @@ const STATUS_ANTIGO = { nao_assinado: 'pendente_presidencia', enviado_orientador
 let antigo = null;
 function lerAntigo(txt) {
   txt = txt.trim();
-  if (txt.startsWith('{')) return JSON.parse(txt);
+  if (txt.startsWith('{')) {
+    const o = JSON.parse(txt);
+    const vals = Object.values(o);
+    if (!o.usuarios && vals.length && vals.every(v => v && typeof v === 'object' && 'senha' in v && 'nome' in v)) return { usuarios: o };
+    return o;
+  }
   const r = {};
   txt.split(/\r?\n/).forEach(l => { const i = l.indexOf('\t'); if (i > 0) { const k = l.slice(0, i).trim(); try { r[k] = JSON.parse(l.slice(i + 1).split('\t')[0]); } catch { } } });
   return r;
@@ -99,9 +118,11 @@ acao('migImportar', async (d, b) => {
   const mapU = (id) => mapa[id] || null; const mapL = (arr) => (arr || []).map(mapU).filter(Boolean);
   const tsBR = (s) => { if (!s) return agora; const [dt, hr] = String(s).split(' '); const iso = brParaISO(dt); const t = new Date(`${iso}T${hr || '00:00'}:00`).getTime(); return isNaN(t) ? agora : t; };
   try {
-    // 1. usuários (contas no Firebase Auth com a mesma senha)
     for (const [login, u] of Object.entries(antigo.usuarios || {})) {
-      if (!u.email) { avisos.push(`Sem e-mail: ${u.nome} (pulado)`); continue; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u.email || '')) {
+        u.email = `${login.toLowerCase().replace(/[^a-z0-9._-]/g, '')}@sem-email.lacmes.app`;
+        avisos.push(`${login}: sem e-mail — login pelo usuário "${login}" (sem e-mail real não dá para usar "Esqueci minha senha")`);
+      }
       const existente = Object.values(S.usuarios).find(x => (x.email || '').toLowerCase() === u.email.toLowerCase());
       let uid = existente && existente.id;
       let senha = u.senha || 'lacmes2026'; if (senha.length < 6) { senha = 'lacmes' + senha; avisos.push(`${login}: senha alterada para "${senha}"`); }
@@ -115,7 +136,6 @@ acao('migImportar', async (d, b) => {
       log(`✓ usuário ${login}`);
     }
     const uidPorNome = (n) => porNome[n] || Object.values(S.usuarios).find(x => x.nome === n)?.id || S.uid;
-    // 2. projetos + chat
     for (const [pid, info] of Object.entries(antigo.projetos_info || {})) {
       const dd = (antigo.projetos_dados || {})[pid] || {};
       const membros = (dd.membros || []).filter(m => mapa[m.id]).map(m => ({ uid: mapa[m.id], papel: m.role || 'Pesquisador' }));
@@ -134,21 +154,17 @@ acao('migImportar', async (d, b) => {
       if (msgs.length) await Data.batch(msgs);
       log(`✓ projeto ${info.titulo} (${msgs.length} mensagens)`);
     }
-    // 3. oportunidades
     const ops = Object.values(antigo.oportunidades || {}).map(o => op.set(`oportunidades/${o.id}`, {
       tipo: o.tipo, titulo: o.titulo, descricao: o.descricao || '', orientador: o.orientador || '', local: o.local || '', link: o.link || '', vagas: o.vagas || 1,
       eixos: [AREA_EIXO[(o.area || '').toLowerCase()] || 'clinica'], data: brParaISO(o.data), horaInicio: o.horaInicio || '', horaFim: o.horaFim || '', cargaHoraria: o.cargaHorariaTotal || 0, orientacoes: o.orientacoesConfirmados || '',
       criadoPorCargo: o.criadoPorCargo, criadoPor: uidPorNome(o.criadoPorNome), fases: o.fases, faseAtual: o.faseAtual || 0, inscritos: mapL(o.inscritos), confirmados: mapL(o.confirmados), presencas: [],
       atualizacoes: (o.atualizacoes || []).map(a => ({ texto: a.texto, anexoNome: a.anexoNome || '', anexoUrl: a.anexoUrl || '', em: tsBR(a.data), autor: uidPorNome(a.autor) })), projetoId: o.projetoGeradoId ? 'p' + o.projetoGeradoId : null, criadoEm: agora
     }));
-    // 4. aulas, mural→fórum, financeiro, atas
     (antigo.aulas || []).forEach(a => ops.push(op.set(`aulas/${a.id}`, { titulo: a.titulo, professor: a.professor || '', data: brParaISO(a.data), hora: a.hora || '', local: a.local || '', cargaHoraria: a.cargaHoraria || 0, eixos: ['clinica'], imagem: '', descHtml: a.desc ? `<p>${esc(a.desc)}</p>` : '', seguidores: mapL(a.seguidores), presentes: null, certificadosEnviados: mapL(a.certificadosEnviados), criadoEm: agora })));
     (antigo.mural || []).forEach(m => ops.push(op.set(`forum/${m.id}`, { tipo: 'post', titulo: m.texto.slice(0, 70) + (m.texto.length > 70 ? '…' : ''), html: `<p>${esc(m.texto)}</p>${m.anexoUrl ? `<p><a href="${esc(m.anexoUrl)}">${esc(m.anexoNome || 'Anexo')}</a></p>` : ''}`, eixos: ['clinica'], autor: uidPorNome(m.autor), criadoEm: tsBR(m.data), fixado: false, nComentarios: 0, enquete: null })));
     (antigo.financeiro || []).forEach(f => ops.push(op.set(`financeiro/${f.id}`, { tipo: f.tipo, descricao: f.descricao, valor: Number(f.valor) || 0, data: brParaISO(f.data), criadoEm: agora })));
     (antigo.atasGerais || []).forEach(a => ops.push(op.set(`atas/${a.id}`, { titulo: a.titulo, data: brParaISO(a.data), resumoHtml: a.resumo ? `<p>${esc(a.resumo)}</p>` : '', link: a.linkAta || '', criadoEm: agora })));
-    // 5. agendas pessoais
     Object.entries(antigo.eventosPessoais || {}).forEach(([uidAnt, evs]) => { const uid = mapa[uidAnt]; if (uid) (evs || []).forEach(ev => ops.push(op.set(`usuarios/${uid}/eventos/${ev.id}`, { titulo: ev.titulo, data: brParaISO(ev.data), horaInicio: ev.horaInicio || '', horaFim: ev.horaFim || '', categoria: ev.categoria || 'Outros', subcategoria: ev.subcategoria || null, projetoId: ev.projetoId ? 'p' + ev.projetoId : null, criadoEm: agora }))); });
-    // 6. certificados
     (antigo.certificados || []).forEach(c => { const uid = mapa[c.userId]; if (!uid) return; const tipo = c.tipo === 'Estagio' ? 'Estagio' : c.tipo; ops.push(op.set(`certificados/${c.id}`, {
       userId: uid, nomeMembro: c.nomeMembro, tipo, cargaHoraria: c.cargaHoraria || 0, cargoTexto: c.cargoTexto || '', projetoId: c.projetoId ? 'p' + c.projetoId : null, periodoInicio: c.periodoInicio || null, periodoFim: c.periodoFim || null,
       titulo: tituloCert(tipo, c.cargoTexto), signerUid: S.config.orientadoraUid || null, signerNome: c.orientadoraNome || S.config.orientadoraNome || '', signerCargo: c.orientadoraCargo || 'Orientadora — LACMES',

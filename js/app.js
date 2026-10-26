@@ -1,7 +1,3 @@
-// ============================================================================
-// APLICATIVO — autenticação, navegação (rotas #/...), barra lateral, sino de
-// notificações, indicador de sincronização, instalação do PWA.
-// ============================================================================
 import { Data, onSync } from './data.js';
 import { DEMO_MODE } from './config.js';
 import { S, iniciarStore, pararStore, aoMudar, limparTela } from './store.js';
@@ -20,13 +16,16 @@ import certificados from './pages/certificados.js';
 import { financeiro, atas } from './pages/gestao.js';
 import { usuarios, migracao } from './pages/usuarios.js';
 import perfil from './pages/perfil.js';
+import planejamento from './pages/planejamento.js';
+import documentos from './pages/documentos.js';
+import { abrirArquivo } from './arquivos.js';
 
-const PAGINAS = { inicio, forum, projetos, oportunidades, inscricoes, agenda, aulas, certificados, financeiro, atas, painel, usuarios, migracao, perfil };
+const PAGINAS = { inicio, forum, projetos, oportunidades, inscricoes, agenda, aulas, certificados, financeiro, atas, painel, planejamento, documentos, usuarios, migracao, perfil };
 const MENU = [
   ['inicio', 'Início', 'home'], ['forum', 'Fórum', 'forum'], ['projetos', 'Projetos', 'pasta'],
   ['oportunidades', 'Oportunidades', 'maleta'], ['inscricoes', 'Minhas inscrições', 'ticket'], ['agenda', 'Agenda', 'calendario'],
   ['aulas', 'Aulas', 'livro'], ['certificados', 'Certificados', 'certificado'], '—',
-  ['painel', 'Painel da diretoria', 'painel'], ['financeiro', 'Financeiro', 'carteira'], ['atas', 'Atas da diretoria', 'ata'],
+  ['painel', 'Painel da diretoria', 'painel'], ['planejamento', 'Planejamento', 'plano'], ['documentos', 'Documentos', 'enviarDoc'], ['financeiro', 'Financeiro', 'carteira'], ['atas', 'Atas da diretoria', 'ata'],
   ['usuarios', 'Usuários', 'usuarios'], ['perfil', 'Meu perfil', 'usuario']
 ];
 const TABBAR = [['inicio', 'Início', 'home'], ['forum', 'Fórum', 'forum'], ['agenda', 'Agenda', 'calendario'], ['projetos', 'Projetos', 'pasta']];
@@ -34,7 +33,6 @@ const TABBAR = [['inicio', 'Início', 'home'], ['forum', 'Fórum', 'forum'], ['a
 const $ = (s) => document.querySelector(s);
 let rotaAtual = '', paramsAtuais = [];
 
-// ---------------------------------------------------------------- ROTAS ----
 function lerRota() {
   const partes = (location.hash.replace(/^#\/?/, '') || 'inicio').split('/').map(decodeURIComponent);
   const id = PAGINAS[partes[0]] ? partes[0] : 'inicio';
@@ -48,7 +46,6 @@ function podeVer(id) {
   return !pg.visivel || pg.visivel(eu);
 }
 
-// guarda valores digitados/rolagem para não perder nada quando os dados mudam
 function capturar(view) {
   const est = { campos: {}, foco: null, rolagens: {} };
   view.querySelectorAll('input[id], textarea[id], select[id], [contenteditable="true"][id]').forEach(el => {
@@ -111,7 +108,6 @@ export function renderizar(mudouRota) {
 window.addEventListener('hashchange', () => renderizar(true));
 window.addEventListener('lacmes-render', () => renderizar(false));
 
-// ---------------------------------------------------------------- MENU ----
 function contadorPendencias() {
   const eu = S.eu;
   const assinar = S.certificados.filter(c => (c.status === 'pendente_presidencia' && P.admin(eu)) || (c.status === 'pendente_orientador' && c.signerUid === S.uid)).length;
@@ -137,7 +133,6 @@ acao('abrirGaveta', () => document.body.classList.add('gaveta-aberta'));
 const fecharGaveta = () => document.body.classList.remove('gaveta-aberta');
 acao('fecharGaveta', fecharGaveta);
 
-// ------------------------------------------------------- NOTIFICAÇÕES ----
 function desenharSino() {
   const nao = S.notificacoes.filter(n => !n.lida).length;
   const b = $('#sino-badge');
@@ -157,13 +152,12 @@ acao('abrirNotif', ({ id, url }) => { marcarLida(id); document.body.classList.re
 acao('lerTodas', () => marcarTodasLidas());
 document.addEventListener('click', (e) => { if (!e.target.closest('#sino-painel, [data-action="alternarSino"]')) document.body.classList.remove('sino-aberto'); });
 
-// --------------------------------------------------------- MENÇÕES ----
 document.addEventListener('click', (e) => {
   const m = e.target.closest('.mencao'); if (!m || m.closest('[contenteditable="true"]')) return;
   const { kind, id } = m.dataset;
   const pid = m.closest('[data-projeto]')?.dataset.projeto;
   if (kind === 'user') { const u = S.usuarios[id]; if (u) cartaoPessoa(u); }
-  else if (kind === 'file' && pid) { const a = (S.projetos[pid]?.arquivos || []).find(x => x.id === id); a ? window.open(a.url, '_blank', 'noopener') : toast('Arquivo não encontrado (pode ter sido removido).', 'erro'); }
+  else if (kind === 'file' && pid) { const a = (S.projetos[pid]?.arquivos || []).find(x => x.id === id); a ? abrirArquivo(a.url, a.nome) : toast('Arquivo não encontrado (pode ter sido removido).', 'erro'); }
   else if (kind === 'date') { location.hash = `#/agenda/${id}`; }
   else if (kind === 'task' && pid) { location.hash = `#/projetos/${pid}/tarefas`; }
 });
@@ -171,14 +165,12 @@ function cartaoPessoa(u) {
   abrirModal({ titulo: u.nome, largura: 380, corpo: `<div class="cartao-pessoa">${avatar(u, 72)}<strong>${esc(u.nome)}</strong><span>${esc(u.email || '')}</span><span class="mudo">${esc(u.titulacao || '')}</span>${u.cargo ? `<span>${esc(u.cargo)}</span>` : ''}</div>` });
 }
 
-// -------------------------------------------------------------- SYNC ----
 onSync((estado) => {
   const el = $('#sync'); if (!el) return;
   const txt = { ok: DEMO_MODE ? 'Modo demonstração (local)' : 'Sincronizado', salvando: 'Salvando…', offline: 'Offline — salvo no aparelho' }[estado];
   el.className = 'sync sync-' + estado; el.querySelector('span').textContent = txt;
 });
 
-// -------------------------------------------------------------- PWA ----
 let promptInstalar = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); promptInstalar = e; document.body.classList.add('pode-instalar'); });
 window.addEventListener('appinstalled', () => { document.body.classList.remove('pode-instalar'); toast('LACMES instalado!', 'ok'); });
@@ -193,7 +185,6 @@ acao('instalarApp', async () => {
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e));
 if (ehIOS() && !instalado()) document.body.classList.add('pode-instalar');
 
-// ------------------------------------------------------------ LOGIN ----
 function mostrar(tela) {
   ['carregando', 'tela-login', 'app'].forEach(id => { $('#' + id).hidden = id !== tela; });
 }
@@ -260,7 +251,6 @@ acao('configurarPortal', async () => {
 });
 acao('sair', async () => { await Data.auth.logout(); });
 
-// ------------------------------------------------------------ INÍCIO ----
 let desligarRender = null, ultimaNotif = 0;
 async function iniciar() {
   if (localStorage.getItem('lacmes-sb')) document.body.classList.add('sb-recolhida');

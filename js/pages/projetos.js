@@ -1,7 +1,3 @@
-// ============================================================================
-// PROJETOS (grupos de pesquisa/extensão/artigo/resumo) — chat com @menções,
-// tarefas, escala, arquivos, membros, reuniões, coleta e conclusão.
-// ============================================================================
 import { Data } from '../data.js';
 import { S, tela, ouvirTela, nomeDe, primeiroNome, usuariosAtivos, meusProjetos, souCoordenador, souMembro } from '../store.js';
 import { P, CATEGORIAS, categoriaBadge, eixosChips, eixoPicker, lerEixos, PAPEIS_PROJETO, EIXOS } from '../dominio.js';
@@ -10,6 +6,8 @@ import { cabecalho, vazio, btn, btnIc, campo, linhaCampos, seletorPessoas, abas,
 import { ativarMencoes, mencionados, mencaoHTML } from '../editor.js';
 import { notificar } from '../notificar.js';
 import { criarCertificados } from '../cert.js';
+import { WORKER_URL } from '../config.js';
+import { anexar, apagarAnexo, iconeArquivo, botaoAbrir, tipoDe, tamanho, LIMITE_LOCAL } from '../arquivos.js';
 
 const ABAS = [
   { id: 'chat', nome: 'Chat', icone: 'comentario' }, { id: 'tarefas', nome: 'Tarefas', icone: 'tarefa' }, { id: 'escala', nome: 'Escala', icone: 'calendario' },
@@ -21,7 +19,6 @@ let mesEscala = 0;
 const upd = (pid, dados) => Data.update(`projetos/${pid}`, dados);
 const naoLido = (p) => p.ultimaMensagem && p.ultimaMensagem.autor !== S.uid && p.ultimaMensagem.em > Number(localStorage.getItem('lacmes-lido-' + p.id) || 0);
 
-// ---------------------------------------------------------- LISTAGEM ----
 function renderLista() {
   let lista = meusProjetos();
   if (filtro.cat !== 'todas') lista = lista.filter(p => p.categoria === filtro.cat);
@@ -75,7 +72,6 @@ acao('salvarProjeto', async ({ pid }) => {
   notificar({ tipo: 'projeto', pref: 'eixos', eixos: dados.eixos, titulo: `Novo projeto: ${titulo}`, corpo: dados.categoria, url: `#/projetos/${id}/sobre` });
 });
 
-// --------------------------------------------------------------- CHAT ----
 function fontesMencao(p) {
   return (termo) => {
     const r = [];
@@ -133,7 +129,6 @@ acao('enviarMsg', async ({ pid }) => {
 acao('apagarMsg', async ({ pid, id }) => { if (await confirmar('Apagar mensagem?', { ok: 'Apagar', perigo: true })) Data.del(`projetos/${pid}/mensagens/${id}`); });
 const msgSistema = (pid, html, icone) => Data.add(`projetos/${pid}/mensagens`, { sistema: true, html, icone, autor: S.uid, criadoEm: Date.now() });
 
-// ------------------------------------------------------------ TAREFAS ----
 function abaTarefas(p) {
   const coord = souCoordenador(p);
   const item = (t) => {
@@ -142,6 +137,7 @@ function abaTarefas(p) {
     return `<div class="tarefa ${t.concluida ? 'feita' : ''}">
       <button class="tarefa-check" ${(!minha && !coord) || t.concluida ? 'disabled' : ''} data-action="concluirTarefa" data-pid="${p.id}" data-id="${t.id}" title="Concluir">${t.concluida ? ic('check') : ''}</button>
       <div class="tarefa-corpo"><strong>${esc(t.titulo)}</strong>${t.desc ? `<p>${esc(t.desc)}</p>` : ''}
+        ${(t.anexos || []).length ? `<div class="anexos-linha">${t.anexos.map(a => `<span class="anexo-chip">${iconeArquivo(a.nome, a.url)}<span>${esc(a.nome)}</span>${botaoAbrir(a.url, a.nome)}</span>`).join('')}</div>` : ''}
         <div class="meta">${meta('calendario', t.prazo ? `<span class="${atrasada ? 'txt-perigo' : ''}">${isoParaBR(t.prazo)}${atrasada ? ' · atrasada' : ''}</span>` : 'Sem prazo')}
           ${meta('usuarios', (t.resp || []).includes('TODOS') ? 'Todos' : (t.resp || []).map(primeiroNome).join(', '))}
           ${t.concluida ? meta('concluido', `por ${primeiroNome(t.concluidaPor)} em ${fmtDataHora(t.concluidaEm)}`) : ''}</div></div>
@@ -158,14 +154,23 @@ acao('novaTarefa', ({ pid }) => {
   abrirModal({ titulo: 'Atribuir tarefa', largura: 560, corpo: `
     ${campo('Título', '<input id="tf-titulo">')}${campo('Descrição (opcional)', '<textarea id="tf-desc" rows="2"></textarea>')}
     ${campo('Prazo', '<input type="date" id="tf-prazo">')}
+    ${campo('Anexar arquivos (opcional)', '<input type="file" id="tf-arquivos" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.zip,image/*">', 'PDF, Word, Excel, PowerPoint ou imagem. Os responsáveis veem na tarefa.')}
     ${campo('Responsáveis', seletorPessoas('tf-resp', (p.membros || []).map(m => m.uid), [], { todosOpcao: true }))}
     <div class="acoes-form">${btn('Cancelar', 'fecharModal')}${btn('Atribuir', 'salvarTarefa', { classe: 'btn-pri', icone: 'check', dados: { pid } })}</div>` });
 });
-acao('salvarTarefa', async ({ pid }) => {
+acao('salvarTarefa', async ({ pid }, botao) => {
   const titulo = val('tf-titulo'); const resp = [...document.querySelectorAll('input[name="tf-resp"]:checked')].map(i => i.value);
   if (!titulo || !resp.length) { toast('Informe título e pelo menos um responsável.', 'erro'); return; }
   const p = S.projetos[pid];
-  const t = { id: novoId('t'), titulo, desc: val('tf-desc'), prazo: val('tf-prazo'), resp, concluida: false, criadoPor: S.uid, criadoEm: Date.now() };
+  const anexos = [];
+  botao.disabled = true;
+  try {
+    for (const f of document.getElementById('tf-arquivos').files) {
+      const r = await anexar(f, { pasta: `projetos/${pid}` });
+      anexos.push({ nome: r.nome, url: r.url, tipo: r.tipo, tam: r.tam });
+    }
+  } catch (e) { await Promise.all(anexos.map(a => apagarAnexo(a.url))); toast(e.message, 'erro', 7000); botao.disabled = false; return; }
+  const t = { id: novoId('t'), titulo, desc: val('tf-desc'), prazo: val('tf-prazo'), resp, anexos, concluida: false, criadoPor: S.uid, criadoEm: Date.now() };
   await upd(pid, { tarefas: [...(p.tarefas || []), t] });
   fecharModal();
   await msgSistema(pid, `${esc(primeiroNome(S.uid))} atribuiu ${mencaoHTML({ kind: 'task', id: t.id, label: titulo })} a ${resp.map(u => mencaoHTML({ kind: 'user', id: u, label: nomeDe(u) })).join(', ')}${t.prazo ? ` — prazo ${mencaoHTML({ kind: 'date', id: t.prazo, label: isoParaBR(t.prazo) })}` : ''}`, 'tarefa');
@@ -181,7 +186,6 @@ acao('concluirTarefa', async ({ pid, id }) => {
 });
 acao('apagarTarefa', async ({ pid, id }) => { if (await confirmar('Excluir tarefa?', { ok: 'Excluir', perigo: true })) upd(pid, { tarefas: S.projetos[pid].tarefas.filter(t => t.id !== id) }); });
 
-// ------------------------------------------------------------- ESCALA ----
 function abaEscala(p) {
   const base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + mesEscala);
   const ano = base.getFullYear(), mes = base.getMonth();
@@ -228,40 +232,59 @@ acao('presencaEscala', async ({ pid, iso }) => {
 });
 acao('apagarEscala', async ({ pid, iso }) => { const esc2 = { ...S.projetos[pid].escala }; delete esc2[iso]; await upd(pid, { escala: esc2 }); fecharModal(); });
 
-// ----------------------------------------------------------- ARQUIVOS ----
 function abaArquivos(p) {
   const podeGerir = souCoordenador(p) || souMembro(p);
   const lista = (p.arquivos || []).slice().sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0)).map(a => `
-    <div class="linha-item">${ic('clipe')}<div class="li-txt"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.nome)}</a><small>${a.por ? esc(primeiroNome(a.por)) + ' · ' : ''}${tempoRelativo(a.criadoEm)}</small></div>
-      ${btnIc('copiar', 'citarArquivo', { pid: p.id, id: a.id }, 'Citar no chat')}${souCoordenador(p) || a.por === S.uid ? btnIc('lixeira', 'apagarArquivo', { pid: p.id, id: a.id }, 'Remover') : ''}</div>`).join('');
-  return `<div class="aba-cab"><h4>Arquivos</h4>${podeGerir ? btn('Adicionar', 'novoArquivo', { icone: 'mais', dados: { pid: p.id } }) : ''}</div>${lista || vazio('Nenhum arquivo anexado.', 'clipe')}`;
+    <div class="linha-item">${iconeArquivo(a.nome, a.url)}<div class="li-txt"><strong>${esc(a.nome)}</strong><small>${esc(tipoDe(a.nome, a.url).rot)}${a.tam ? ' · ' + tamanho(a.tam) : ''} · ${a.por ? esc(primeiroNome(a.por)) + ' · ' : ''}${tempoRelativo(a.criadoEm)}</small></div>
+      ${botaoAbrir(a.url, a.nome)}${btnIc('arroba', 'citarArquivo', { pid: p.id, id: a.id }, 'Citar no chat')}${souCoordenador(p) || a.por === S.uid ? btnIc('lixeira', 'apagarArquivo', { pid: p.id, id: a.id }, 'Remover') : ''}</div>`).join('');
+  return `<div class="aba-cab"><h4>Arquivos (${(p.arquivos || []).length})</h4>${podeGerir ? btn('Adicionar', 'novoArquivo', { icone: 'mais', dados: { pid: p.id } }) : ''}</div>${lista || vazio('Nenhum arquivo anexado. Anexe PDF, Word, Excel, PowerPoint ou imagens.', 'clipe')}`;
 }
-acao('novoArquivo', ({ pid }) => abrirModal({ titulo: 'Adicionar arquivo', largura: 480, corpo: `
-  ${campo('Enviar do dispositivo', '<input type="file" id="af-arquivo">', 'PDF, imagens, planilhas…')}
+acao('novoArquivo', ({ pid }) => {
+  const p = S.projetos[pid];
+  abrirModal({ titulo: 'Adicionar arquivos', largura: 540, corpo: `
+  ${campo('Enviar do dispositivo (um ou vários)', '<input type="file" id="af-arquivo" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.zip,image/*">', `PDF, Word, Excel, PowerPoint, imagens… ${WORKER_URL ? 'Até 15 MB cada.' : `Até ${Math.round(LIMITE_LOCAL / 1024)} KB cada (para arquivos maiores use um link do Drive).`}`)}
   <p class="ou"><span>ou</span></p>
-  ${campo('Nome', '<input id="af-nome" placeholder="Ex.: TCLE assinado">')}${campo('Link (Drive, OneDrive…)', '<input id="af-url" placeholder="https://">')}
-  <div class="acoes-form">${btn('Cancelar', 'fecharModal')}${btn('Adicionar', 'salvarArquivo', { classe: 'btn-pri', dados: { pid } })}</div>` }));
-acao('salvarArquivo', async ({ pid }, b) => {
-  const f = document.getElementById('af-arquivo').files[0];
-  let nome = val('af-nome'), url = val('af-url');
-  b.disabled = true; b.textContent = 'Enviando…';
-  try {
-    if (f) { url = await enviarArquivo(f, `projetos/${pid}`); nome = nome || f.name; }
-    if (!nome || !/^(https?:|data:)/.test(url)) { toast('Envie um arquivo ou informe nome e link.', 'erro'); b.disabled = false; b.textContent = 'Adicionar'; return; }
-    const a = { id: novoId('a'), nome, url, por: S.uid, criadoEm: Date.now() };
-    await upd(pid, { arquivos: [...(S.projetos[pid].arquivos || []), a] });
-    fecharModal();
-    msgSistema(pid, `${esc(primeiroNome(S.uid))} adicionou ${mencaoHTML({ kind: 'file', id: a.id, label: nome })}`, 'clipe');
-  } catch (e) { toast(e.message, 'erro'); b.disabled = false; b.textContent = 'Adicionar'; }
+  ${campo('Nome do link', '<input id="af-nome" placeholder="Ex.: TCLE assinado">')}${campo('Link (Drive, Docs, OneDrive…)', '<input id="af-url" placeholder="https://">')}
+  ${campo('Citar pessoas ao anexar (opcional — elas são avisadas)', seletorPessoas('af-pessoas', (p.membros || []).map(m => m.uid).filter(u => u !== S.uid), []))}
+  <div class="acoes-form">${btn('Cancelar', 'fecharModal')}${btn('Adicionar', 'salvarArquivo', { classe: 'btn-pri', dados: { pid } })}</div>` });
 });
-acao('apagarArquivo', async ({ pid, id }) => { if (await confirmar('Remover este arquivo?', { ok: 'Remover', perigo: true })) upd(pid, { arquivos: S.projetos[pid].arquivos.filter(a => a.id !== id) }); });
+acao('salvarArquivo', async ({ pid }, b) => {
+  const files = [...document.getElementById('af-arquivo').files];
+  const nomeLink = val('af-nome'), urlLink = val('af-url');
+  const citados = [...document.querySelectorAll('input[name="af-pessoas"]:checked')].map(i => i.value);
+  if (!files.length && !(nomeLink && /^https?:\/\//.test(urlLink))) { toast('Envie um arquivo ou informe nome e link (https://…).', 'erro'); return; }
+  b.disabled = true; b.textContent = 'Enviando…';
+  const novos = [];
+  try {
+    for (const f of files) {
+      const r = await anexar(f, { pasta: `projetos/${pid}` });
+      novos.push({ id: novoId('a'), nome: r.nome, url: r.url, tipo: r.tipo, tam: r.tam, por: S.uid, criadoEm: Date.now() });
+    }
+    if (nomeLink && /^https?:\/\//.test(urlLink)) novos.push({ id: novoId('a'), nome: nomeLink, url: urlLink, por: S.uid, criadoEm: Date.now() });
+    await upd(pid, { arquivos: [...(S.projetos[pid].arquivos || []), ...novos] });
+    fecharModal();
+    const arquivosTxt = novos.map(a => mencaoHTML({ kind: 'file', id: a.id, label: a.nome })).join(' ');
+    const pessoasTxt = citados.length ? ` — ${citados.map(u => mencaoHTML({ kind: 'user', id: u, label: nomeDe(u) })).join(', ')}` : '';
+    msgSistema(pid, `${esc(primeiroNome(S.uid))} adicionou ${arquivosTxt}${pessoasTxt}`, 'clipe');
+    if (citados.length) notificar({ tipo: 'mencao', pref: 'mencoes', uids: citados, titulo: `${primeiroNome(S.uid)} compartilhou ${novos.length > 1 ? novos.length + ' arquivos' : 'um arquivo'} com você`, corpo: `${novos.map(a => a.nome).join(', ')} · ${S.projetos[pid].titulo}`, url: `#/projetos/${pid}/arquivos` });
+    toast(`${novos.length} arquivo(s) adicionado(s).`, 'ok');
+  } catch (e) {
+    if (novos.length) await Promise.all(novos.map(a => apagarAnexo(a.url)));
+    toast(e.message, 'erro', 7000); b.disabled = false; b.textContent = 'Adicionar';
+  }
+});
+acao('apagarArquivo', async ({ pid, id }) => {
+  if (!(await confirmar('Remover este arquivo?', { ok: 'Remover', perigo: true }))) return;
+  const a = S.projetos[pid].arquivos.find(x => x.id === id);
+  await upd(pid, { arquivos: S.projetos[pid].arquivos.filter(x => x.id !== id) });
+  if (a) apagarAnexo(a.url);
+});
 acao('citarArquivo', ({ pid, id }) => {
   const a = S.projetos[pid].arquivos.find(x => x.id === id);
   location.hash = `#/projetos/${pid}/chat`;
   setTimeout(() => { const el = document.getElementById('chat-input'); if (!el) return; el.focus(); document.execCommand('insertHTML', false, mencaoHTML({ kind: 'file', id, label: a.nome }) + '&nbsp;'); }, 120);
 });
 
-// ------------------------------------------------------------ MEMBROS ----
 function abaMembros(p) {
   const coord = souCoordenador(p);
   const cards = (p.membros || []).map(m => { const u = S.usuarios[m.uid] || { nome: 'Removido' }; return `
@@ -296,7 +319,6 @@ acao('removerMembro', async ({ pid, uid }) => {
   await upd(pid, { membros, membroIds: membros.map(m => m.uid) });
 });
 
-// ----------------------------------------------------------- REUNIÕES ----
 function abaReunioes(p) {
   const coord = souCoordenador(p);
   const ativas = (p.reunioes || []).filter(r => !r.concluida).sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
@@ -338,7 +360,6 @@ acao('salvarEncerramento', async ({ pid, id }) => {
 });
 acao('apagarReuniao', async ({ pid, id }) => { if (await confirmar('Excluir reunião?', { ok: 'Excluir', perigo: true })) upd(pid, { reunioes: S.projetos[pid].reunioes.filter(r => r.id !== id) }); });
 
-// ------------------------------------------------------------- COLETA ----
 function abaColeta(p) {
   const coord = souCoordenador(p);
   const etapas = (p.coleta || []).map(e => `<div class="card coleta-etapa"><div class="aba-cab"><h5>${esc(e.etapa)}</h5>${coord ? `<span>${btnIc('mais', 'novoLinkColeta', { pid: p.id, id: e.id }, 'Adicionar instrumento')}${btnIc('lixeira', 'apagarEtapa', { pid: p.id, id: e.id }, 'Excluir etapa')}</span>` : ''}</div>
@@ -352,7 +373,6 @@ acao('novoLinkColeta', ({ pid, id }) => abrirModal({ titulo: 'Novo instrumento',
 acao('salvarLinkColeta', async ({ pid, id }) => { const nome = val('lc-nome'), url = val('lc-url'); if (!nome || !url) return; await upd(pid, { coleta: S.projetos[pid].coleta.map(e => e.id === id ? { ...e, links: [...(e.links || []), { nome, url }] } : e) }); fecharModal(); });
 acao('apagarLinkColeta', (d, el, ev) => { ev.preventDefault(); upd(d.pid, { coleta: S.projetos[d.pid].coleta.map(e => e.id === d.id ? { ...e, links: e.links.filter((_, i) => i !== Number(d.i)) } : e) }); });
 
-// -------------------------------------------------------------- SOBRE ----
 function abaSobre(p) {
   const coord = souCoordenador(p);
   const enviados = p.certificadosEnviados || [];
@@ -394,7 +414,6 @@ acao('apagarProjeto', async ({ pid }) => {
   location.hash = '#/projetos';
 });
 
-// ------------------------------------------------------------- DETALHE ----
 function renderDetalhe(pid, aba = 'chat') {
   const p = S.projetos[pid];
   if (!p) return `<a class="voltar" href="#/projetos">${ic('voltar')} Projetos</a>${vazio('Projeto não encontrado.', 'pasta')}`;

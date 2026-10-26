@@ -1,6 +1,3 @@
-// ============================================================================
-// DADOS DE EXEMPLO — só usados no MODO DEMONSTRAÇÃO (config.js vazio).
-// ============================================================================
 import { hojeISO, somarDias } from './util.js';
 import { getFasesPadrao, prefsPadrao } from './dominio.js';
 
@@ -103,6 +100,20 @@ export function popularDemo(Data) {
       fi2: { tipo: 'Saída', descricao: 'Material para ação de extensão', valor: 120, data: somarDias(h, -33), criadoEm: agora - 33 * dia }
     },
     atas: { at1: { titulo: 'Reunião Geral da Diretoria', data: somarDias(h, -20), resumoHtml: '<p>Planejamento do semestre e definição de novas oportunidades.</p>', link: '', criadoEm: agora - 20 * dia } },
+    arquivosLiga: {
+      ar1: { titulo: 'Edital de seleção 2026.2', categoria: 'Edital de seleção', descricao: 'Inscrições abertas para novos membros da LACMES.', url: 'https://example.com/edital-2026-2.pdf', nome: 'edital-2026-2.pdf', tipo: 'application/pdf', tam: 245000, por: 'u1', criadoEm: agora - dia }
+    },
+    documentos: {
+      dc1: { lista: 'modelo', titulo: 'Modelo de edital de seleção', categoria: 'Edital', ano: '', descricao: 'Base para os editais de seleção de membros.', url: 'https://docs.google.com/document/d/modelo-edital/edit', nome: 'Modelo de edital', tipo: 'link', tam: 0, por: 'u5', criadoEm: agora - 3 * dia },
+      dc2: { lista: 'modelo', titulo: 'Modelo de slides da liga', categoria: 'Slides', ano: '', descricao: '', url: 'https://docs.google.com/presentation/d/modelo-slides/edit', nome: 'Modelo de slides', tipo: 'link', tam: 0, por: 'u5', criadoEm: agora - 2 * dia },
+      dc3: { lista: 'liga', titulo: 'Estatuto da LACMES', categoria: 'Estatuto', ano: '2024', descricao: 'Versão vigente.', url: 'https://drive.google.com/file/d/estatuto/view', nome: 'Estatuto', tipo: 'link', tam: 0, por: 'u1', criadoEm: agora - 30 * dia }
+    },
+    planejamento: {
+      pl1: { titulo: 'Aula de ECG básico', categoria: 'Aula', subtipo: '', eixos: ['cardio'], docente: 'Dr. Marcos Tavares', data: somarDias(h, 12), hora: '19:00', horaFim: '21:00', local: 'Auditório UEPA', link: '', certifica: true, cargaHoraria: 2, vagas: 0, orientacoes: '', descHtml: '<p>Ritmo sinusal, bloqueios e <b>arritmias</b> mais comuns.</p>', notasInternas: 'Confirmar projetor e pedir certificado ao professor.', participantes: [], cargos: ['Diretor de Ensino'], status: 'planejado', criadoPor: 'u4', criadoEm: agora - dia },
+      pl2: { titulo: 'Hands-on de gasometria arterial', categoria: 'Hands-on', subtipo: '', eixos: ['pneumo', 'emergencia'], docente: '', data: '', hora: '', horaFim: '', local: 'Laboratório de habilidades', link: '', certifica: true, cargaHoraria: 3, vagas: 0, orientacoes: '', descHtml: '', notasInternas: 'Data depende do laboratório.', participantes: [], cargos: ['Diretor de Ensino'], status: 'planejado', criadoPor: 'u4', criadoEm: agora - 2 * dia },
+      pl3: { titulo: 'Reunião geral da diretoria', categoria: 'Reunião', subtipo: '', eixos: ['clinica'], docente: 'Presidência', data: somarDias(h, 5), hora: '20:00', horaFim: '21:00', local: '', link: 'https://meet.google.com/', certifica: false, cargaHoraria: 1, vagas: 0, orientacoes: '', descHtml: '<p>Pauta: semestre e certificados.</p>', notasInternas: '', participantes: ['u2', 'u3', 'u4'], cargos: ['Vice-presidente e Secretário'], status: 'planejado', criadoPor: 'u5', criadoEm: agora - dia },
+      pl4: { titulo: 'Revisão sistemática em IC', categoria: 'Escrita', subtipo: 'Artigo', eixos: ['cardio'], docente: 'Profa. Camila Reis', data: '', hora: '', horaFim: '', local: '', link: '', certifica: true, cargaHoraria: 20, vagas: 4, orientacoes: '', descHtml: '<p>Revisão com submissão prevista para o próximo semestre.</p>', notasInternas: 'Verificar periódicos-alvo.', participantes: [], cargos: ['Diretor de Pesquisa'], status: 'planejado', criadoPor: 'u3', criadoEm: agora - 3 * dia }
+    },
     certificados: {
       ce1: { userId: 'u9', nomeMembro: 'Pedro Henrique Nogueira', tipo: 'Aula', titulo: 'Participação em Aula — Distúrbios Hidroeletrolíticos', cargoTexto: 'Distúrbios Hidroeletrolíticos', cargaHoraria: 2, status: 'pendente_presidencia', signerUid: 'u11', signerNome: 'Dra. Andrea Leal Novaes', signerCargo: 'Orientadora — LACMES', criadoPor: 'u4', criadoEm: agora - 6 * dia, historico: [{ em: agora - 6 * dia, por: 'u4', acao: 'Criado' }], codigo: 'LAC-7Q2M-K9XD' }
     },
@@ -110,7 +121,6 @@ export function popularDemo(Data) {
       n1: { tipo: 'estagio', titulo: 'Amanhã: Estágio de Observação — Ambulatório de Cardiologia', corpo: '08:00 · Hospital Regional do Baixo Amazonas', url: '#/agenda', lida: false, criadoEm: agora - 30 * min }
     }
   };
-  // ajusta a estrutura das senhas para o formato esperado pelo motor demo
   dados._demo_senhas = { mapa: senhas };
   Data._resetar(dados);
 }

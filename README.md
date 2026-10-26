@@ -136,6 +136,20 @@ Diretoria solicita  →  Presidência assina  →  Orientador(a) assina  →  PD
 
 ---
 
+## 7b. Planejamento (rascunho da diretoria)
+
+Menu **Planejamento**: a Presidência vê tudo; cada diretor vê só as categorias do seu cargo (Aula/Hands-on → Ensino · Pesquisa e Escrita → Pesquisa · Extensão → Extensão · Estágio → Estágios · Reunião → Vice/Secretaria · Evento → Comunicação e Ensino · Outro → qualquer diretor).
+Cada item guarda título, categoria, eixos, docente, data/horário, local, se emite certificado, carga horária, vagas, descrição e **notas internas** (nunca publicadas). **Nada chega aos membros** até clicar em **Confirmado**: aí vira Aula, Oportunidade (pesquisa, extensão, artigo/resumo, estágio) ou compromisso na Agenda (todos ou só participantes escolhidos), e os membros são notificados.
+Lembre de publicar de novo o `firestore.rules` (coleções `planejamento` e `eventosLiga`).
+## 7c. Alterar/cancelar eventos, arquivos e documentos
+
+- **Alterar ou cancelar** aula, estágio/oportunidade ou evento/reunião já confirmado: botões *Alterar* e *Cancelar* (na lista de Aulas, no Painel, no Planejamento e no detalhe da Agenda). Quem acompanha (aula: quem clicou em Acompanhar; oportunidade: inscritos e confirmados; evento: participantes ou todos) recebe notificação com o que mudou e o motivo. Cancelados saem da agenda e podem ser *Reativados* (também com aviso). **Itens ainda em Planejamento nunca geram notificação.**
+- **Presidência** edita e-mail, usuário, senha e eixos de cada pessoa em *Usuários → editar*. Trocar **e-mail ou senha** de outra pessoa exige o Cloudflare Worker publicado (rota `/admin/usuario`, que usa a conta de serviço); usuário e eixos funcionam sem ele. Redeploy do Worker: `cd worker && npx wrangler deploy`.
+- **Foto de perfil**: *Meu perfil → Adicionar/Trocar foto*.
+- **Arquivos** (PDF, Word, Excel, PowerPoint, imagem, ZIP) em projetos/artigos (aba Arquivos), tarefas e atualizações de oportunidades; dá para citar arquivo ou pessoa com `@` no chat e marcar pessoas ao anexar. Sem Worker: até 650 KB por arquivo (guardado no Firestore); com Worker: até 15 MB (Cloudflare R2). Para arquivos grandes, use link do Google Drive.
+- **Arquivos da liga**: Fórum → aba *Arquivos da liga* (editais de seleção, regimento…). Todos veem; a diretoria publica.
+- **Documentos** (só Presidência e Vice/Secretaria): *Documentos-Modelos* (podem ser enviados ao chat/arquivos de um projeto ou aos arquivos da liga) e *Documentos da Liga* (arquivo ou link do Drive/Docs/Slides).
+- Publique de novo o `firestore.rules` (novas coleções `anexos`, `arquivosLiga`, `documentos`).
 ## 8. App no celular (PWA) e notificações
 
 - **Android / Chrome / Edge**: menu → *Instalar app* (ou botão **Instalar app** no portal).

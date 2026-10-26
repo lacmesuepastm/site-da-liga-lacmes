@@ -1,7 +1,3 @@
-// ============================================================================
-// ESTADO EM MEMÓRIA — espelho das coleções do Firestore, atualizado em tempo
-// real por listeners (substitui o "polling" de 4 s do Apps Script).
-// ============================================================================
 import { Data } from './data.js';
 import { P } from './dominio.js';
 import { debounce } from './util.js';
@@ -10,7 +6,7 @@ export const S = {
   uid: null, eu: null,
   usuarios: {}, projetos: {}, oportunidades: {},
   aulas: [], forum: [], financeiro: [], atas: [], certificados: [],
-  config: {}, eventos: [], notificacoes: [],
+  config: {}, eventos: [], eventosLiga: [], notificacoes: [], planejamento: [], arquivosLiga: [], documentos: [],
   carregado: false
 };
 
@@ -41,16 +37,25 @@ export function iniciarStore(uid) {
   subs.push(Data.watchCol('aulas', lista('aulas', (a, b) => (a.data || '').localeCompare(b.data || '') || (a.hora || '').localeCompare(b.hora || ''))));
   subs.push(Data.watchCol('forum', lista('forum', ordenarDesc), { orderBy: ['criadoEm', 'desc'], limit: 300 }));
   subs.push(Data.watchCol('financeiro', lista('financeiro', (a, b) => (b.data || '').localeCompare(a.data || ''))));
+  subs.push(Data.watchCol('eventosLiga', lista('eventosLiga')));
+  subs.push(Data.watchCol('arquivosLiga', lista('arquivosLiga', ordenarDesc)));
   subs.push(Data.watchCol(`usuarios/${uid}/eventos`, lista('eventos')));
   subs.push(Data.watchCol(`usuarios/${uid}/notificacoes`, lista('notificacoes', ordenarDesc), { orderBy: ['criadoEm', 'desc'], limit: 60 }));
 }
 
-// Listeners que dependem do papel (as regras do Firestore bloqueiam o resto)
 function iniciarPapel() {
   subsPapel.forEach(u => u()); subsPapel = [];
   const eu = S.eu; if (!eu) return;
   if (P.verAtas(eu)) subsPapel.push(Data.watchCol('atas', (l) => { S.atas = l.sort((a, b) => (b.data || '').localeCompare(a.data || '')); avisar(); }));
   else S.atas = [];
+
+  if (P.documentos(eu)) subsPapel.push(Data.watchCol('documentos', (l) => { S.documentos = l.sort(ordenarDesc); avisar(); }));
+  else S.documentos = [];
+
+  const ordPlan = (l) => { S.planejamento = l.sort((a, b) => (a.data || '9999').localeCompare(b.data || '9999') || (a.hora || '').localeCompare(b.hora || '')); avisar(); };
+  if (P.admin(eu)) subsPapel.push(Data.watchCol('planejamento', ordPlan));
+  else if (eu.cargo) subsPapel.push(Data.watchCol('planejamento', ordPlan, { where: [['cargos', 'array-contains', eu.cargo]] }));
+  else S.planejamento = [];
 
   if (P.admin(eu)) {
     subsPapel.push(Data.watchCol('certificados', (l) => { S.certificados = l.sort(ordenarDesc); avisar(); }));
@@ -65,19 +70,17 @@ function iniciarPapel() {
 export function pararStore() {
   subs.forEach(u => u()); subsPapel.forEach(u => u());
   subs = []; subsPapel = []; papelAtual = '';
-  Object.assign(S, { uid: null, eu: null, usuarios: {}, projetos: {}, oportunidades: {}, aulas: [], forum: [], financeiro: [], atas: [], certificados: [], config: {}, eventos: [], notificacoes: [], carregado: false });
+  Object.assign(S, { uid: null, eu: null, usuarios: {}, projetos: {}, oportunidades: {}, aulas: [], forum: [], financeiro: [], atas: [], certificados: [], config: {}, eventos: [], eventosLiga: [], notificacoes: [], planejamento: [], arquivosLiga: [], documentos: [], carregado: false });
 }
 
-// Listeners de uma tela específica (chat, comentários, votos) — limpos ao trocar de rota
 let subsTela = {};
 export function ouvirTela(chave, criar) {
   if (subsTela[chave]) return;
   subsTela[chave] = criar(avisar);
 }
 export function limparTela() { Object.values(subsTela).forEach(u => u && u()); subsTela = {}; }
-export const tela = {}; // dados carregados pelos listeners de tela
+export const tela = {};
 
-// --------------------------------------------------------- CONSULTAS ----
 export const usuario = (uid) => S.usuarios[uid] || null;
 export const nomeDe = (uid) => (S.usuarios[uid] && S.usuarios[uid].nome) || 'Usuário removido';
 export const primeiroNome = (uid) => nomeDe(uid).split(' ')[0];

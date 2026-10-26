@@ -1,10 +1,7 @@
-// ============================================================================
-// COMPONENTES VISUAIS REUTILIZADOS PELAS PÁGINAS
-// ============================================================================
 import { ic, esc, avatar, acao } from './util.js';
 import { S } from './store.js';
 
-export const ui = { abertos: {} };   // estado de colapsáveis (sobrevive às re-renderizações)
+export const ui = { abertos: {} };
 
 export const vazio = (msg, icone = 'info') => `<div class="vazio">${ic(icone)}<p>${esc(msg)}</p></div>`;
 
@@ -21,7 +18,6 @@ export function btnIc(icone, action, dados = {}, titulo = '', classe = '') {
   return `<button type="button" class="btn-ic ${classe}" data-action="${action}" ${attrs} title="${esc(titulo)}" aria-label="${esc(titulo)}">${ic(icone)}</button>`;
 }
 
-// Bloco que abre/fecha com animação. `padrao` = aberto inicialmente?
 export function colapsavel(id, titulo, corpo, { padrao = true, extra = '', icone = '' } = {}) {
   const aberto = ui.abertos[id] ?? padrao;
   return `<section class="colap ${aberto ? 'aberto' : ''}" data-colap="${esc(id)}">
@@ -43,7 +39,6 @@ export function abas(lista, ativa, action, dados = {}) {
   return `<div class="abas" role="tablist">${lista.map(a => `<button type="button" role="tab" class="aba ${a.id === ativa ? 'ativa' : ''}" data-action="${action}" data-aba="${a.id}" ${attrs}>${a.icone ? ic(a.icone) : ''}<span>${esc(a.nome)}</span>${a.badge ? `<span class="aba-badge">${a.badge}</span>` : ''}</button>`).join('')}</div>`;
 }
 
-// Lista de pessoas com busca e marcação múltipla
 export function seletorPessoas(nome, uids, selecionados = [], { todosOpcao = false } = {}) {
   const sel = new Set(selecionados);
   const linhas = uids.map(uid => {

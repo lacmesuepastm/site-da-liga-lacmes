@@ -1,7 +1,3 @@
-// ============================================================================
-// MEU PERFIL — dados, foto, eixos que sigo, notificações, assinatura
-// eletrônica (Presidência/Orientador), senha e instalação do app
-// ============================================================================
 import { Data } from '../data.js';
 import { S } from '../store.js';
 import { P, TIPOS_USUARIO, cargoBadge, eixoPicker, lerEixos, PREFS_NOTIF, prefsPadrao } from '../dominio.js';
@@ -11,7 +7,7 @@ import { ativarPush, pushStatus } from '../notificar.js';
 import { resetarCacheAssinatura } from './certificados.js';
 import { DEMO_MODE } from '../config.js';
 
-let assinaturaAtual; // undefined = não carregada
+let assinaturaAtual;
 
 function render(params) {
   const u = S.eu; const prefs = { ...prefsPadrao(), ...(u.notifPrefs || {}) };
@@ -22,6 +18,9 @@ function render(params) {
   <div class="perfil-grade">
     <section class="card perfil-id">
       <label class="perfil-foto" title="Trocar foto">${avatar(u, 96)}<span>${ic('imagem')}</span><input type="file" accept="image/*" data-change="trocarFoto" hidden></label>
+      <div class="acoes-linha centro" style="margin:10px 0 0">
+        <label class="btn btn-peq">${ic('imagem')}<span>${u.foto ? 'Trocar foto' : 'Adicionar foto'}</span><input type="file" accept="image/*" data-change="trocarFoto" hidden></label>
+        ${u.foto ? btn('Remover', 'removerFoto', { classe: 'btn-peq btn-perigo-txt', icone: 'lixeira' }) : ''}</div>
       <h3>${esc(u.nome)}</h3><p class="mudo">${esc(u.email)}</p>
       <div class="linha-chk centro"><span class="pill">${TIPOS_USUARIO[u.tipo]}</span>${u.cargo ? cargoBadge(u.cargo) : ''}</div>
       <p class="mudo pequeno">Login rápido: <code>${esc(u.username || '—')}</code></p>
@@ -69,10 +68,14 @@ function render(params) {
 }
 
 acao('trocarFoto', async (d, input) => {
-  const f = input.files[0]; if (!f) return;
-  try { const url = await enviarArquivo(f, 'avatares', { imagemMax: 320 }); await Data.update(`usuarios/${S.uid}`, { foto: url }); toast('Foto atualizada.', 'ok'); }
+  const f = input.files[0]; input.value = '';
+  if (!f) return;
+  if (!/^image\//.test(f.type)) { toast('Escolha uma imagem (JPG, PNG…).', 'erro'); return; }
+  toast('Enviando foto…', 'info', 1500);
+  try { const url = await enviarArquivo(f, 'avatares', { imagemMax: 360 }); await Data.update(`usuarios/${S.uid}`, { foto: url }); toast('Foto atualizada.', 'ok'); }
   catch (e) { toast(e.message, 'erro'); }
 });
+acao('removerFoto', async () => { await Data.update(`usuarios/${S.uid}`, { foto: '' }); toast('Foto removida.', 'ok'); });
 acao('salvarPerfil', async () => { await Data.update(`usuarios/${S.uid}`, { titulacao: val('pf-tit'), vinculo: val('pf-vinc') }); toast('Dados salvos.', 'ok'); });
 acao('salvarEixos', async () => { await Data.update(`usuarios/${S.uid}`, { eixosSeguidos: lerEixos('pf-eixos') }); toast('Eixos atualizados.', 'ok'); });
 acao('pref', ({ id }, el) => Data.update(`usuarios/${S.uid}`, { [`notifPrefs.${id}`]: el.checked }));
@@ -84,7 +87,6 @@ acao('alterarSenha', async () => {
   catch (e) { toast(/wrong-password|invalid-credential/.test(e.code || e.message) ? 'Senha atual incorreta.' : e.message, 'erro'); }
 });
 
-// ----------------------------------------------------- ASSINATURA (canvas) ----
 let desenhou = false;
 function prepararCanvas(cv) {
   if (!cv || cv._ok) return; cv._ok = true; desenhou = false;

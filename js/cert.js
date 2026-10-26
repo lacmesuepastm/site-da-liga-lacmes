@@ -1,12 +1,3 @@
-// ============================================================================
-// CERTIFICADOS — criação, fluxo de assinatura e geração do PDF no navegador
-//
-// Fluxo eletrônico (padrão, sem papel):
-//   pendente_presidencia ──(Presidência assina)──▶ pendente_orientador
-//   ──(Orientador(a) assina)──▶ emitido  (PDF final + código de verificação)
-//   Qualquer assinante pode "devolver" com motivo → devolvido → reenviar.
-// Fluxo manual (alternativo): em cada etapa, enviar o PDF assinado à mão.
-// ============================================================================
 import { Data, F, op } from './data.js';
 import { S, nomeDe } from './store.js';
 import { P } from './dominio.js';
@@ -32,7 +23,6 @@ export function tituloCert(tipo, cargoTexto) {
   })[tipo] || 'Membro da LACMES';
 }
 
-// Quem assina como orientador(a): o orientador com conta no projeto, senão a orientadora geral da liga.
 export function assinanteDe({ tipo, projetoId }) {
   const proj = projetoId && S.projetos[projetoId];
   if (tipo === 'Projeto' && proj && proj.orientadorUid && S.usuarios[proj.orientadorUid]) {
@@ -118,7 +108,6 @@ export async function devolver(id, motivo) {
 export const reenviar = (id, mudancas = {}) => Data.update(`certificados/${id}`, { ...mudancas, status: 'pendente_presidencia', motivoDevolucao: null, historico: registrar('Corrigido e reenviado') });
 export const cancelar = (id) => Data.update(`certificados/${id}`, { status: 'cancelado', historico: registrar('Cancelado') });
 
-// Fluxo manual: PDF assinado fisicamente/por outro app
 export async function enviarManual(ids, etapa, file) {
   const url = await enviarArquivo(file, 'certificados');
   for (const id of ids) {
@@ -148,7 +137,6 @@ function abrirBlob(blob, nome) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-// ------------------------------------------------------------- PDF ----
 let logoCache = null;
 async function logo() {
   if (logoCache) return logoCache;
@@ -160,7 +148,6 @@ function periodo(c) {
   const i = isoParaBR(c.periodoInicio), f = isoParaBR(c.periodoFim);
   return i && f ? `${i} a ${f}` : (i ? `a partir de ${i}` : (f ? `até ${f}` : ''));
 }
-// Texto do certificado como trechos [texto, negrito?]
 function trechos(c) {
   const N = [c.nomeMembro, true], L = ['Liga Acadêmica de Clínica Médica de Santarém (LACMES)', false];
   const CH = [`${String(c.cargaHoraria).replace('.', ',')} horas`, true];
@@ -173,7 +160,6 @@ function trechos(c) {
     default: return [['Certificamos que ', 0], N, [' atuou como membro da ', 0], L, per ? [`, no período de ${per}`, 0] : ['', 0], [', com carga horária total de ', 0], CH, ['.', 0]];
   }
 }
-// quebra de linhas com trechos em negrito, centralizado
 function textoRico(doc, partes, xCentro, y, larguraMax, tam, entre) {
   const palavras = [];
   partes.forEach(([t, b]) => String(t).split(/(\s+)/).forEach(w => { if (w) palavras.push({ w, b: !!b }); }));
@@ -235,7 +221,6 @@ export async function gerarPDF(c, { assinaturaPres, assinaturaOrient, previa = f
   return doc.output('blob');
 }
 
-// ------------------------------------------------- CARGA HORÁRIA ----
 export function horasEstagio(uid) {
   return Object.values(S.oportunidades).filter(o => o.tipo === 'Estágio' && (o.confirmados || []).includes(uid) && (o.presencas ? o.presencas.includes(uid) : true)).reduce((s, o) => s + (o.cargaHoraria || 0), 0);
 }

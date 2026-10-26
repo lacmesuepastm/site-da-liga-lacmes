@@ -1,9 +1,5 @@
-// ============================================================================
-// INÍCIO — resumo do dia: próximos compromissos, caso da semana, tarefas,
-// oportunidades abertas e novidades do fórum
-// ============================================================================
 import { S, nomeDe, meusProjetos } from '../store.js';
-import { P, eixosChips } from '../dominio.js';
+import { P, eixosChips, planBadge } from '../dominio.js';
 import { ic, esc, avatar, tempoRelativo, hojeISO, somarDias, dataExtensa, isoParaBR, textoPuro } from '../util.js';
 import { vazio } from '../ui.js';
 import { compromissos } from './agenda.js';
@@ -19,9 +15,17 @@ function render() {
   const forum = S.forum.filter(p => p.id !== caso?.id).slice(0, 4);
   const assinar = S.certificados.filter(c => (c.status === 'pendente_presidencia' && P.admin(eu)) || (c.status === 'pendente_orientador' && c.signerUid === S.uid)).length;
 
+  const planejados = P.planejar(eu) ? S.planejamento.filter(p => (p.status || 'planejado') === 'planejado') : [];
+  const semData = planejados.filter(p => !p.data).length, atrasados = planejados.filter(p => p.data && p.data < hoje).length;
+  const blocoPlano = P.planejar(eu) ? `<section class="bloco bloco-largo"><div class="bloco-cab"><h4>${ic('plano')} Planejamento <span class="mudo">· só a diretoria vê</span></h4><a href="#/planejamento" class="link">Abrir ${ic('dir')}</a></div>
+        ${planejados.length ? `<p class="mudo pequeno" style="margin:0 0 4px">${planejados.length} planejado(s) aguardando confirmação${semData ? ` · ${semData} sem data` : ''}${atrasados ? ` · <span class="txt-perigo">${atrasados} com data passada</span>` : ''}</p>
+        ${planejados.slice(0, 5).map(p => `<a class="linha-item" href="#/planejamento">${planBadge(p.categoria)}<div class="li-txt"><strong>${esc(p.titulo)}</strong><small>${p.data ? dataExtensa(p.data) + (p.hora ? ' · ' + esc(p.hora) : '') : 'Data a definir'}${p.docente ? ' · ' + esc(p.docente) : ''}${p.certifica ? ' · certificado' : ''}</small></div></a>`).join('')}`
+        : vazio('Nada planejado no momento. Comece pelo botão "Novo planejamento".', 'plano')}</section>` : '';
+
   return `<div class="inicio-cab"><div><p class="mudo">${saudacao()},</p><h2>${esc(eu.nome.split(' ')[0])}</h2></div>${eixosChips(eu.eixosSeguidos, { mini: true })}</div>
     ${assinar ? `<a class="aviso link-aviso" href="#/certificados/assinar">${ic('caneta')}<div><b>${assinar} certificado(s) aguardando sua assinatura.</b> Toque para assinar.</div>${ic('dir')}</a>` : ''}
     <div class="painel-inicio">
+      ${blocoPlano}
       <section class="bloco"><div class="bloco-cab"><h4>${ic('calendario')} Próximos 7 dias</h4><a href="#/agenda" class="link">Agenda ${ic('dir')}</a></div>
         ${prox.length ? prox.map(c => `<a class="prox" href="${c.url || '#/agenda'}" style="--c:${c.cor}"><span class="prox-data"><b>${c.data === hoje ? 'Hoje' : (c.data === somarDias(hoje, 1) ? 'Amanhã' : dataExtensa(c.data).split(',')[0])}</b><small>${esc(c.hora || 'dia todo')}</small></span><span class="prox-txt"><strong>${esc(c.titulo)}</strong><small>${esc(c.tipo)}${c.local ? ' · ' + esc(c.local) : ''}</small></span></a>`).join('') : vazio('Semana livre por enquanto.', 'calendario')}
       </section>

@@ -1,7 +1,3 @@
-// ============================================================================
-// AULAS — anúncio com foto de capa, descrição formatada, eixos, chamada e
-// certificação
-// ============================================================================
 import { Data, F } from '../data.js';
 import { S, nomeDe } from '../store.js';
 import { P, eixosChips, eixoPicker, lerEixos, EIXOS } from '../dominio.js';
@@ -10,6 +6,7 @@ import { cabecalho, vazio, btn, btnIc, campo, linhaCampos, meta, seletorPessoas 
 import { editorHTML, lerEditor } from '../editor.js';
 import { notificar } from '../notificar.js';
 import { criarCertificados } from '../cert.js';
+import { avisarAlteracao, mudancasEntre, botoesGestao } from '../eventos.js';
 
 const filtro = { eixo: null };
 
@@ -18,16 +15,19 @@ function card(a, passada) {
   const gerir = P.aulas(S.eu);
   const d = dataDeISO(a.data);
   const pendCert = (a.presentes || a.seguidores || []).filter(u => !(a.certificadosEnviados || []).includes(u)).length;
-  return `<article class="card card-aula ${passada ? 'passada' : ''}">
+  return `<article class="card card-aula ${passada ? 'passada' : ''} ${a.cancelada ? 'cancelada' : ''}">
     <div class="ca-capa">${a.imagem ? `<img src="${esc(a.imagem)}" alt="" loading="lazy">` : `<div class="ca-capa-vazia">${ic('livro')}</div>`}
       ${d ? `<div class="ca-data"><b>${d.getDate()}</b><span>${MESES[d.getMonth()].slice(0, 3)}</span></div>` : ''}</div>
     <div class="ca-corpo">
       <div class="ca-topo">${eixosChips(a.eixos, { mini: true })}${gerir ? `<span>${btnIc('lapis', 'editarAula', { id: a.id }, 'Editar')}${btnIc('lixeira', 'apagarAula', { id: a.id }, 'Excluir')}</span>` : ''}</div>
+      ${a.tipo === 'Hands-on' || a.certifica ? `<div class="cp-topo">${a.tipo === 'Hands-on' ? `<span class="tag-linha" style="--tc:#0987a0">${ic('caneta')}Hands-on</span>` : ''}${a.certifica ? `<span class="tag-linha" style="--tc:#AB9748">${ic('certificado')}Emite certificado</span>` : ''}</div>` : ''}
+      ${a.cancelada ? `<div class="aviso-cancelado">${ic('alerta')}<div><b>Aula cancelada</b>${a.motivoCancelamento ? `<p>${esc(a.motivoCancelamento)}</p>` : ''}</div></div>` : ''}
       <h3>${esc(a.titulo)}</h3>
       <div class="meta">${meta('usuario', esc(a.professor))}${meta('calendario', `${dataExtensa(a.data)} · ${esc(a.hora)}`)}${meta('local', esc(a.local))}${meta('relogio', `${a.cargaHoraria || 0}h`)}</div>
       ${a.descHtml ? `<div class="rich ca-desc">${sanitizar(a.descHtml)}</div>` : ''}
       <div class="acoes-linha esq">
-        ${!passada ? `<button class="btn ${seguindo ? 'btn-on' : 'btn-pri'}" data-action="seguirAula" data-id="${a.id}">${ic(seguindo ? 'check' : 'mais')}<span>${seguindo ? 'Acompanhando' : 'Acompanhar'}</span></button>` : ''}
+        ${!passada && !a.cancelada ? `<button class="btn ${seguindo ? 'btn-on' : 'btn-pri'}" data-action="seguirAula" data-id="${a.id}">${ic(seguindo ? 'check' : 'mais')}<span>${seguindo ? 'Acompanhando' : 'Acompanhar'}</span></button>` : ''}
+        ${gerir && !passada ? botoesGestao('aula', a.id, a.cancelada) : ''}
         <span class="mudo pequeno">${(a.seguidores || []).length} acompanhando</span>
         ${passada && gerir ? btn('Chamada', 'chamadaAula', { icone: 'tarefa', classe: 'btn-peq', dados: { id: a.id } }) + btn(`Certificar${pendCert ? ` (${pendCert})` : ' ✓'}`, 'certificarAula', { icone: 'certificado', classe: 'btn-peq', dados: { id: a.id } }) : ''}
       </div>
@@ -72,7 +72,13 @@ acao('salvarAula', async ({ id }) => {
   if (document.getElementById('capa-prev').classList.contains('enviando')) { toast('Aguarde o envio da foto terminar.', 'info'); return; }
   const titulo = val('na-titulo'); if (!titulo || !val('na-data')) { toast('Informe título e data.', 'erro'); return; }
   const d = { titulo, professor: val('na-prof'), data: val('na-data'), hora: val('na-hora'), local: val('na-local'), cargaHoraria: Number(val('na-carga')) || 0, eixos: lerEixos('na-eixos'), descHtml: lerEditor('na-desc'), imagem: document.getElementById('capa-prev').dataset.url || '' };
-  if (id) { await Data.update(`aulas/${id}`, d); fecharModal(); return; }
+  if (id) {
+    const antes = S.aulas.find(a => a.id === id);
+    await Data.update(`aulas/${id}`, d);
+    fecharModal();
+    if (antes) await avisarAlteracao('aula', antes, mudancasEntre('aula', antes, d));
+    return;
+  }
   await Data.add('aulas', { ...d, seguidores: [], presentes: null, certificadosEnviados: [], criadoPor: S.uid, criadoEm: Date.now() });
   fecharModal(); toast('Aula publicada!', 'ok');
   notificar({ tipo: 'aula', pref: 'aulas', todos: true, eixos: d.eixos, titulo: `Nova aula: ${titulo}`, corpo: `${dataExtensa(d.data)} às ${d.hora} · ${d.professor}`, url: '#/aulas' });

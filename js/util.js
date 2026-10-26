@@ -1,11 +1,6 @@
-// ============================================================================
-// UTILITÁRIOS — ícones, segurança de HTML, datas, modal, toasts, ações, upload
-// ============================================================================
 import { Data } from './data.js';
 import { WORKER_URL } from './config.js';
 
-// ---------------------------------------------------------------- ÍCONES ----
-// Todos em traço (stroke), 24×24 — combinam com o visual minimalista.
 const P = {
   home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
   forum: '<path d="M4 5h16v11H8l-4 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
@@ -84,6 +79,8 @@ const P = {
   enviarDoc: '<path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M12 18v-6M9.5 14.5 12 12l2.5 2.5"/>',
   voltar: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   estrela: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+  plano: '<rect x="4" y="4.5" width="16" height="16" rx="2"/><path d="M8 2.5v4M16 2.5v4M4 10h16M8 14h3M8 17h6"/>',
+  cadeadoAberto: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 7.5-2"/>',
   grade: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/>'
 };
 export function ic(nome, cls = '') {
@@ -91,7 +88,6 @@ export function ic(nome, cls = '') {
 }
 export const ICONES = P;
 
-// ------------------------------------------------------- HTML SEGURO ----
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -99,8 +95,6 @@ const TAGS_OK = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'P', 'BR'
 const ATTRS_OK = { A: ['href'], IMG: ['src', 'alt'], SPAN: ['data-mention', 'data-kind', 'data-id', 'class'] };
 const urlSegura = (u, img) => /^(https?:|mailto:|#)/i.test(u) || (img && /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(u));
 
-// Remove scripts, eventos, estilos e qualquer coisa fora da lista permitida.
-// Todo texto formatado (fórum, casos, aulas) passa por aqui antes de ir à tela.
 export function sanitizar(html) {
   if (!html) return '';
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
@@ -134,7 +128,6 @@ export function avatar(u, tam = 32) {
   return `<span class="avatar avatar-txt" style="width:${tam}px;height:${tam}px;font-size:${Math.round(tam * 0.38)}px">${esc(iniciais(u && u.nome))}</span>`;
 }
 
-// ------------------------------------------------------------- DATAS ----
 const pad = (n) => String(n).padStart(2, '0');
 export const isoDe = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 export const hojeISO = () => isoDe(new Date());
@@ -163,15 +156,12 @@ export function horasEntre(ini, fim) {
   let min = (h2 * 60 + m2) - (h1 * 60 + m1); if (min < 0) min += 1440;
   return Math.round(min / 60 * 100) / 100;
 }
-// Período do dia a partir de "HH:MM": manhã < 12h ≤ tarde < 18h ≤ noite
 export function periodoDe(hora) {
   if (!hora) return 'dia';
   const h = Number(hora.split(':')[0]);
   return h < 12 ? 'manha' : (h < 18 ? 'tarde' : 'noite');
 }
 
-// ----------------------------------------------------------- AÇÕES ----
-// Em vez de onclick inline, os botões usam data-action="nome".
 const acoes = {};
 export function acao(nome, fn) { acoes[nome] = fn; }
 export function acoesMultiplas(mapa) { Object.assign(acoes, mapa); }
@@ -193,7 +183,6 @@ document.addEventListener('change', despachar('change'));
 document.addEventListener('input', despachar('input'));
 document.addEventListener('submit', despachar('submit'));
 
-// ------------------------------------------------------------ TOAST ----
 export function toast(msg, tipo = 'info', ms = 3200) {
   let box = document.getElementById('toasts');
   if (!box) { box = document.createElement('div'); box.id = 'toasts'; document.body.appendChild(box); }
@@ -204,7 +193,6 @@ export function toast(msg, tipo = 'info', ms = 3200) {
   setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 300); }, ms);
 }
 
-// ------------------------------------------------------------ MODAL ----
 let modalAtual = null;
 export function abrirModal({ titulo, corpo, largura = 520, aoFechar } = {}) {
   fecharModal(true);
@@ -247,13 +235,11 @@ export function confirmar(msg, { ok = 'Confirmar', perigo = false } = {}) {
   });
 }
 
-// --------------------------------------------------------- FORMULÁRIOS ----
 export const val = (id) => { const el = document.getElementById(id); return el ? (el.type === 'checkbox' ? el.checked : el.value.trim()) : ''; };
 export const marcados = (sel) => [...document.querySelectorAll(sel)].filter(e => e.checked).map(e => e.value);
 export const opcoes = (lista, sel) => lista.map(o => { const v = typeof o === 'string' ? o : o.v; const t = typeof o === 'string' ? o : o.t; return `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(t)}</option>`; }).join('');
 export const novoId = (pref = '') => pref + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-// ------------------------------------------------------ WORKER / UPLOAD ----
 export async function chamarWorker(rota, corpo) {
   if (!WORKER_URL) return null;
   const token = await Data.auth.token();
@@ -282,8 +268,6 @@ export function comprimirImagem(file, max = 1400, qualidade = 0.82) {
 }
 export const blobParaDataURL = (b) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
 
-// Envia um arquivo e devolve uma URL. Com Worker → Cloudflare R2.
-// Sem Worker → imagens viram data-URL comprimida (≈150 KB); outros arquivos até 700 KB.
 export async function enviarArquivo(file, pasta = 'geral', { imagemMax = 1400 } = {}) {
   const ehImagem = /^image\//.test(file.type);
   let corpo = file;

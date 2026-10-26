@@ -1,17 +1,5 @@
-// ============================================================================
-// CLOUDFLARE WORKER — "api" do portal LACMES
-//   POST /push     → envia notificação push (FCM) para uma lista de usuários
-//   POST /upload   → guarda arquivo no Cloudflare R2 (imagens, PDFs, certificados)
-//   GET  /f/<chave>→ serve os arquivos do R2
-//   cron diário    → lembretes da véspera: estágio, aula, reunião, escala e prazo
-//
-// Segredos (NUNCA no GitHub):  wrangler secret put FIREBASE_SERVICE_ACCOUNT
-//   → cole o conteúdo inteiro do JSON da conta de serviço do Firebase.
-// Substitui: Code.gs (Apps Script) + Google Drive (salvarCertificadoPDF).
-// ============================================================================
-
-const SCOPES = 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging';
-const TIPOS_OK = /^(image\/(png|jpe?g|gif|webp)|application\/pdf|application\/vnd\.openxmlformats-officedocument\.[a-z.]+|application\/msword|application\/vnd\.ms-excel|text\/csv|text\/plain)$/;
+const SCOPES = 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/cloud-platform';
+const TIPOS_OK = /^(image\/(png|jpe?g|gif|webp)|application\/pdf|application\/vnd\.openxmlformats-officedocument\.[a-z.]+|application\/vnd\.oasis\.opendocument\.[a-z.-]+|application\/msword|application\/vnd\.ms-(excel|powerpoint)|application\/(rtf|zip|x-zip-compressed)|text\/(csv|plain))$/;
 const MAX_BYTES = 15 * 1024 * 1024;
 
 export default {
@@ -35,6 +23,7 @@ export default {
         ctx.waitUntil(enviarPush(env, uids, { titulo, corpo, url: destino, tag }));
         return json({ ok: true, destinos: uids.length }, 200, cors);
       }
+      if (url.pathname === '/admin/usuario') return alterarUsuario(req, env, usuario, cors);
       if (url.pathname === '/upload') return upload(req, env, usuario, cors, url);
       return json({ erro: 'Rota não encontrada' }, 404, cors);
     } catch (e) {
@@ -43,13 +32,11 @@ export default {
     }
   },
 
-  // Cron (wrangler.toml): todo dia às 21:00 UTC = 18:00 em Santarém
   async scheduled(event, env, ctx) {
     ctx.waitUntil(lembretesDaVespera(env));
   }
 };
 
-// ------------------------------------------------------------- HELPERS ----
 function json(obj, status = 200, headers = {}) {
   return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...headers } });
 }
@@ -64,7 +51,6 @@ const b64urlTexto = (s) => b64url(new TextEncoder().encode(s));
 function b64urlDecode(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
 const conta = (env) => JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
 
-// ------------------------------------------- TOKEN DO USUÁRIO (Firebase) ----
 let cacheChaves = { em: 0, chaves: {} };
 async function chavesGoogle() {
   if (Date.now() - cacheChaves.em < 3600_000) return cacheChaves.chaves;
@@ -90,7 +76,6 @@ async function verificarIdToken(req, env) {
   return ok ? { uid: dados.sub, email: dados.email } : null;
 }
 
-// ------------------------------------- TOKEN DE SERVIÇO (conta de serviço) ----
 let cacheAcesso = { token: null, expira: 0 };
 async function tokenServico(env) {
   if (cacheAcesso.token && Date.now() < cacheAcesso.expira) return cacheAcesso.token;
@@ -108,7 +93,6 @@ async function tokenServico(env) {
   return d.access_token;
 }
 
-// ---------------------------------------------------- FIRESTORE (REST) ----
 const baseFS = (env) => `https://firestore.googleapis.com/v1/projects/${conta(env).project_id}/databases/(default)/documents`;
 function decodificar(v) {
   if (!v) return null;
@@ -152,7 +136,6 @@ async function gravarDoc(env, caminho, dados, campos) {
   return fetch(`${baseFS(env)}/${caminho}${mascara}`, { method: 'PATCH', headers: { Authorization: `Bearer ${await tokenServico(env)}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: codificar(dados).mapValue.fields }) });
 }
 
-// --------------------------------------------------------- PUSH (FCM) ----
 async function enviarPush(env, uids, { titulo, corpo, url, tag }) {
   const token = await tokenServico(env);
   const projeto = conta(env).project_id;
@@ -175,7 +158,25 @@ async function enviarPush(env, uids, { titulo, corpo, url, tag }) {
   return enviados;
 }
 
-// ---------------------------------------------------------- UPLOAD (R2) ----
+async function alterarUsuario(req, env, usuario, cors) {
+  const remetente = await lerDoc(env, `usuarios/${usuario.uid}`);
+  if (!remetente || remetente.tipo !== 'admin' || remetente.ativo === false) return json({ erro: 'Somente a Presidência pode alterar e-mail ou senha.' }, 403, cors);
+  const { uid, email, senha } = await req.json();
+  if (!uid || (!email && !senha)) return json({ erro: 'Informe o usuário e o que alterar.' }, 400, cors);
+  if (senha && String(senha).length < 6) return json({ erro: 'A senha precisa ter 6+ caracteres.' }, 400, cors);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ erro: 'E-mail inválido.' }, 400, cors);
+  const corpo = { localId: uid };
+  if (email) { corpo.email = String(email).toLowerCase(); corpo.emailVerified = false; }
+  if (senha) corpo.password = String(senha);
+  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${conta(env).project_id}/accounts:update`, { method: 'POST', headers: { Authorization: `Bearer ${await tokenServico(env)}`, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+  const resp = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const msg = (resp.error && resp.error.message) || 'Falha ao atualizar a conta.';
+    return json({ erro: /EMAIL_EXISTS/.test(msg) ? 'Esse e-mail já pertence a outra conta.' : msg }, r.status === 400 ? 400 : 502, cors);
+  }
+  return json({ ok: true }, 200, cors);
+}
+
 async function upload(req, env, usuario, cors, url) {
   if (!env.ARQUIVOS) return json({ erro: 'R2 não configurado (binding ARQUIVOS)' }, 500, cors);
   const form = await req.formData();
@@ -199,9 +200,8 @@ async function servirArquivo(url, env) {
   return new Response(obj.body, { headers: h });
 }
 
-// ----------------------------------------------- LEMBRETES DA VÉSPERA ----
 function amanhaEmSantarem() {
-  const agora = new Date(Date.now() - 3 * 3600_000); // America/Santarem = UTC−3, sem horário de verão
+  const agora = new Date(Date.now() - 3 * 3600_000);
   agora.setUTCDate(agora.getUTCDate() + 1);
   return agora.toISOString().slice(0, 10);
 }
@@ -210,7 +210,7 @@ async function lembretesDaVespera(env) {
   const [usuarios, oportunidades, aulas, projetos] = await Promise.all(['usuarios', 'oportunidades', 'aulas', 'projetos'].map(c => listar(env, c)));
   const prefs = Object.fromEntries(usuarios.filter(u => u.ativo !== false).map(u => [u.id, u.notifPrefs || {}]));
   const quer = (uid, pref) => uid in prefs && prefs[uid][pref] !== false;
-  const avisos = []; // { uids, pref, titulo, corpo, url, tag }
+  const avisos = [];
   const br = amanha.split('-').reverse().join('/');
 
   oportunidades.filter(o => o.tipo === 'Estágio' && o.data === amanha).forEach(o => avisos.push({ uids: o.confirmados || [], pref: 'estagioAmanha', titulo: `Amanhã: ${o.titulo}`, corpo: `${o.horaInicio || ''}${o.horaFim ? '–' + o.horaFim : ''} · ${o.local || ''}${o.orientacoes ? ' · ' + o.orientacoes.slice(0, 80) : ''}`, url: '#/agenda', tag: 'estagio-' + o.id }));

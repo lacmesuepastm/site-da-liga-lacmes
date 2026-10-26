@@ -1,11 +1,5 @@
-// ============================================================================
-// REGRAS DO DOMÍNIO — eixos da Clínica Médica, categorias, cargos, permissões
-// ============================================================================
 import { ic, esc } from './util.js';
 
-// ------------------------------------------------------------- EIXOS ----
-// Ícones em traço; cada eixo tem cor do texto/ícone (c) e fundo suave (b),
-// no mesmo padrão das etiquetas "Clínica Médica / Pediatria / Cirurgia Geral".
 const S = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 export const EIXOS = [
   { id: 'clinica', nome: 'Clínica Médica', c: '#2F5C99', b: '#EDF3FC',
@@ -42,7 +36,6 @@ export function eixoChip(id, { mini = false, ativo = true } = {}) {
 }
 export const eixosChips = (ids, opts) => `<span class="eixos">${eixosValidos(ids).map(i => eixoChip(i, opts)).join('')}</span>`;
 
-// Seletor múltiplo; sem nada marcado vale "Clínica Médica".
 export function eixoPicker(nome, selecionados = []) {
   const sel = new Set(selecionados.length ? selecionados : ['clinica']);
   return `<div class="eixo-picker" data-picker="${nome}">${EIXOS.map(e => `
@@ -56,7 +49,6 @@ export function lerEixos(nome) {
   return v.length ? v : ['clinica'];
 }
 
-// -------------------------------------------------------- CATEGORIAS ----
 export const CATEGORIAS = {
   'Pesquisa': { cor: '#2b6cb0', icone: 'lupa' },
   'Extensão': { cor: '#c05621', icone: 'extensao' },
@@ -73,7 +65,6 @@ export function getFasesPadrao(tipo) {
   return ['Inscrições abertas', 'Em seleção', 'Equipe confirmada', 'Em execução', 'Concluído'];
 }
 
-// ------------------------------------------------------------ CARGOS ----
 export const CARGOS = {
   'Diretor de Extensão': { cor: '#c05621', icone: 'extensao', painel: 'Painel de Extensão', tipos: ['Extensão'] },
   'Diretor de Pesquisa': { cor: '#2b6cb0', icone: 'lupa', painel: 'Painel de Pesquisa', tipos: ['Pesquisa', 'Artigo', 'Resumo'] },
@@ -90,13 +81,30 @@ export function cargoBadge(cargo) {
 }
 export const TIPOS_USUARIO = { admin: 'Presidência', usuario: 'Membro', orientador: 'Orientador(a)' };
 
-// -------------------------------------------------------- PERMISSÕES ----
+export const CATEGORIAS_PLAN = {
+  'Aula': { icone: 'livro', cor: '#6b46c1', cargos: ['Diretor de Ensino'], destino: 'aula' },
+  'Hands-on': { icone: 'caneta', cor: '#0987a0', cargos: ['Diretor de Ensino'], destino: 'aula' },
+  'Reunião': { icone: 'reuniao', cor: '#0d9488', cargos: ['Vice-presidente e Secretário'], destino: 'evento' },
+  'Pesquisa': { icone: 'lupa', cor: '#2b6cb0', cargos: ['Diretor de Pesquisa'], destino: 'oportunidade', op: 'Pesquisa' },
+  'Extensão': { icone: 'extensao', cor: '#c05621', cargos: ['Diretor de Extensão'], destino: 'oportunidade', op: 'Extensão' },
+  'Escrita': { icone: 'artigo', cor: '#6b46c1', cargos: ['Diretor de Pesquisa'], destino: 'oportunidade', op: 'Artigo', subtipos: ['Artigo', 'Resumo'] },
+  'Estágio': { icone: 'maleta', cor: '#b7791f', cargos: ['Diretor de Estágios'], destino: 'oportunidade', op: 'Estágio' },
+  'Evento': { icone: 'estrela', cor: '#AB9748', cargos: ['Diretor de Comunicação', 'Diretor de Ensino'], destino: 'evento' },
+  'Outro': { icone: 'pasta', cor: '#4a5568', cargos: LISTA_CARGOS, destino: 'evento' }
+};
+export const DESTINO_PLAN = { aula: 'Aulas', oportunidade: 'Oportunidades', evento: 'Agenda de todos' };
+export const categoriasPlanDe = (u) => Object.keys(CATEGORIAS_PLAN).filter(c => P.admin(u) || (u && CATEGORIAS_PLAN[c].cargos.includes(u.cargo)));
+export function planBadge(cat) {
+  const c = CATEGORIAS_PLAN[cat] || CATEGORIAS_PLAN.Outro;
+  return `<span class="tag-linha" style="--tc:${c.cor}">${ic(c.icone)}${esc(cat)}</span>`;
+}
+
 export const P = {
   admin: (u) => !!u && u.tipo === 'admin',
   orientador: (u) => !!u && u.tipo === 'orientador',
   diretor: (u) => !!u && (u.tipo === 'admin' || !!u.cargo),
   vice: (u) => !!u && u.cargo === 'Vice-presidente e Secretário',
-  forum: (u) => P.diretor(u),                       // qualquer diretor, presidente ou vice
+  forum: (u) => P.diretor(u),
   aulas: (u) => P.admin(u) || (u && u.cargo === 'Diretor de Ensino'),
   financeiro: (u) => P.admin(u) || (u && u.cargo === 'Diretor Financeiro'),
   atas: (u) => P.admin(u) || P.vice(u),
@@ -104,6 +112,8 @@ export const P = {
   tipos: (u) => P.admin(u) ? Object.keys(CATEGORIAS) : ((u && CARGOS[u.cargo]) ? CARGOS[u.cargo].tipos : []),
   oportunidade: (u, tipo) => P.tipos(u).includes(tipo),
   usuarios: (u) => P.admin(u),
+  planejar: (u) => P.diretor(u),
+  documentos: (u) => P.admin(u) || P.vice(u),
   certificados: (u) => P.admin(u),
   emitirCert: (u) => P.diretor(u)
 };

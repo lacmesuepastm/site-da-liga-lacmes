@@ -1,6 +1,3 @@
-// ============================================================================
-// FINANCEIRO (Diretoria Financeira) e ATAS DA DIRETORIA (Secretaria)
-// ============================================================================
 import { Data } from '../data.js';
 import { S } from '../store.js';
 import { P } from '../dominio.js';
@@ -15,7 +12,6 @@ function renderFin() {
   const l = S.financeiro;
   const saldo = l.reduce((s, f) => s + (f.tipo === 'Entrada' ? f.valor : -f.valor), 0);
   const ent = l.filter(f => f.tipo === 'Entrada').reduce((s, f) => s + f.valor, 0), sai = l.filter(f => f.tipo !== 'Entrada').reduce((s, f) => s + f.valor, 0);
-  // últimos 6 meses
   const meses = [];
   for (let i = 5; i >= 0; i--) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`); }
   const porMes = meses.map(m => ({ m, e: l.filter(f => f.tipo === 'Entrada' && (f.data || '').startsWith(m)).reduce((s, f) => s + f.valor, 0), s: l.filter(f => f.tipo !== 'Entrada' && (f.data || '').startsWith(m)).reduce((s, f) => s + f.valor, 0) }));

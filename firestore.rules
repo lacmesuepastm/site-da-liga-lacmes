@@ -1,9 +1,4 @@
 rules_version = '2';
-// ============================================================================
-// REGRAS DE SEGURANÇA DO FIRESTORE — LACMES
-// Publique com:  firebase deploy --only firestore:rules
-// (ou cole no Console → Firestore → Regras → Publicar)
-// ============================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -18,14 +13,12 @@ service cloud.firestore {
     function temCargo(c) { return ativo() && cargo() == c; }
     function inicializado() { return exists(/databases/$(database)/documents/config/publico); }
     function soMudou(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
-    // a lista `campo` só ganhou/perdeu o próprio usuário
     function soEuNaLista(campo) {
       let novo = request.resource.data.get(campo, []).toSet();
       let velho = resource.data.get(campo, []).toSet();
       return novo.difference(velho).hasOnly([request.auth.uid]) && velho.difference(novo).hasOnly([request.auth.uid]);
     }
 
-    // ------------------------------------------------------------ CONFIG ----
     match /config/publico {
       allow read: if true;
       allow create: if logado() && (!inicializado() || admin());
@@ -36,10 +29,8 @@ service cloud.firestore {
       allow write: if admin();
     }
 
-    // ----------------------------------------------------------- USUÁRIOS ----
     match /usuarios/{uid} {
       allow read: if ativo() || (logado() && request.auth.uid == uid);
-      // primeiro acesso (portal sem configuração) ou cadastro feito pela Presidência
       allow create: if admin() || (logado() && request.auth.uid == uid && !inicializado());
       allow update: if admin() || (ativo() && request.auth.uid == uid && soMudou(['foto', 'titulacao', 'vinculo', 'eixosSeguidos', 'notifPrefs']));
       allow delete: if admin();
@@ -53,7 +44,7 @@ service cloud.firestore {
       }
     }
     match /logins/{username} {
-      allow read: if true;                // necessário para entrar com "usuário" em vez de e-mail
+      allow read: if true;
       allow write: if admin();
     }
     match /tokens/{uid} {
@@ -64,7 +55,6 @@ service cloud.firestore {
       allow write: if (admin() || orientador()) && request.auth.uid == uid;
     }
 
-    // ----------------------------------------------------------- PROJETOS ----
     match /projetos/{pid} {
       allow read: if ativo();
       allow create: if diretor();
@@ -80,7 +70,6 @@ service cloud.firestore {
       }
     }
 
-    // -------------------------------------------------------------- FÓRUM ----
     match /forum/{id} {
       allow read: if ativo();
       allow create: if diretor() && request.resource.data.autor == request.auth.uid;
@@ -102,21 +91,44 @@ service cloud.firestore {
       }
     }
 
-    // ------------------------------------------------------ OPORTUNIDADES ----
     match /oportunidades/{id} {
       allow read: if ativo();
       allow create, delete: if diretor();
       allow update: if diretor() || (ativo() && soMudou(['inscritos']) && soEuNaLista('inscritos'));
     }
 
-    // -------------------------------------------------------------- AULAS ----
     match /aulas/{id} {
       allow read: if ativo();
       allow create, delete: if admin() || temCargo('Diretor de Ensino');
       allow update: if admin() || temCargo('Diretor de Ensino') || (ativo() && soMudou(['seguidores']) && soEuNaLista('seguidores'));
     }
 
-    // ------------------------------------------------ FINANCEIRO E ATAS ----
+    match /planejamento/{id} {
+      allow read: if admin() || (ativo() && cargo() != null && cargo() in resource.data.get('cargos', []));
+      allow create: if admin() || (ativo() && cargo() != null && cargo() in request.resource.data.get('cargos', []));
+      allow update: if admin() || (ativo() && cargo() != null && cargo() in resource.data.get('cargos', []) && cargo() in request.resource.data.get('cargos', []));
+      allow delete: if admin() || (ativo() && cargo() != null && cargo() in resource.data.get('cargos', []));
+    }
+    match /eventosLiga/{id} {
+      allow read: if ativo();
+      allow write: if diretor();
+    }
+
+    match /anexos/{id} {
+      allow get: if ativo() && (!resource.data.get('restrito', false) || admin() || temCargo('Vice-presidente e Secretário'));
+      allow list: if false;
+      allow create: if ativo() && request.resource.data.por == request.auth.uid;
+      allow delete: if admin() || (ativo() && resource.data.por == request.auth.uid);
+    }
+    match /arquivosLiga/{id} {
+      allow read: if ativo();
+      allow create: if diretor() && request.resource.data.por == request.auth.uid;
+      allow update, delete: if admin() || (diretor() && resource.data.por == request.auth.uid);
+    }
+    match /documentos/{id} {
+      allow read, write: if admin() || temCargo('Vice-presidente e Secretário');
+    }
+
     match /financeiro/{id} {
       allow read: if ativo();
       allow write: if admin() || temCargo('Diretor Financeiro');
@@ -126,7 +138,6 @@ service cloud.firestore {
       allow write: if admin() || temCargo('Vice-presidente e Secretário');
     }
 
-    // ------------------------------------------------------- CERTIFICADOS ----
     match /certificados/{id} {
       allow read: if admin() || (ativo() && (resource.data.userId == request.auth.uid || resource.data.get('signerUid', null) == request.auth.uid));
       allow create: if diretor();
@@ -139,7 +150,7 @@ service cloud.firestore {
       allow write: if admin() || orientador();
     }
     match /verificacoes/{codigo} {
-      allow read: if true;                // página pública verificar.html
+      allow read: if true;
       allow write: if admin() || orientador();
     }
   }

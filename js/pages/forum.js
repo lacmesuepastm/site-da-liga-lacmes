@@ -1,18 +1,15 @@
-// ============================================================================
-// FÓRUM — publicações, enquetes e CASOS CLÍNICOS (desafios semanais)
-// ============================================================================
 import { Data, F } from '../data.js';
 import { S, tela, ouvirTela, nomeDe, usuariosAtivos } from '../store.js';
 import { P, eixosChips, eixoPicker, lerEixos, EIXOS, EIXO } from '../dominio.js';
 import { ic, esc, sanitizar, textoPuro, acao, avatar, tempoRelativo, abrirModal, fecharModal, confirmar, toast, val, novoId } from '../util.js';
-import { cabecalho, vazio, colapsavel, btn, btnIc, chk, campo, ui } from '../ui.js';
+import { cabecalho, vazio, colapsavel, btn, btnIc, chk, campo, ui, abas } from '../ui.js';
+import { renderArquivosLiga } from './arquivosliga.js';
 import { editorHTML, lerEditor, ativarMencoes, mencionados } from '../editor.js';
 import { notificar } from '../notificar.js';
 
 const filtro = { tipo: 'todos', eixo: null, busca: '' };
 const podeEditar = (p) => P.admin(S.eu) || p.autor === S.uid;
 
-// --------------------------------------------------------- LISTAGEM ----
 function cardPost(p) {
   const caso = p.tipo === 'caso';
   const resumo = textoPuro(caso ? (p.caso?.anamnese?.[0]?.html || '') + ' ' + (p.caso?.pergunta || '') : p.html).slice(0, 190);
@@ -46,6 +43,7 @@ function renderLista() {
   const acoes = P.forum(eu) ? btn('Publicação', 'novoPost', { icone: 'mais', dados: { tipo: 'post' } }) + btn('Caso clínico', 'novoPost', { icone: 'caso', classe: 'btn-pri', dados: { tipo: 'caso' } }) : '';
   const tipos = [['todos', 'Tudo'], ['post', 'Publicações'], ['caso', 'Casos clínicos'], ['enquete', 'Enquetes']];
   return `${cabecalho('Fórum', 'Avisos, discussões, enquetes e casos clínicos da liga.', acoes)}
+    ${abasForum('posts')}
     ${destaque && filtro.tipo !== 'post' ? `<a class="destaque-caso" href="#/forum/${destaque.id}">
       <span class="dc-icone">${ic('caso')}</span>
       <span class="dc-txt"><small>${ic('estrela')} Caso clínico da semana</small><strong>${esc(destaque.titulo)}</strong>${eixosChips(destaque.eixos, { mini: true })}</span>
@@ -61,7 +59,6 @@ acao('forumTipo', ({ tipo }) => { filtro.tipo = tipo; location.hash = '#/forum';
 acao('forumEixo', ({ eixo }) => { filtro.eixo = filtro.eixo === eixo ? null : eixo; window.dispatchEvent(new Event('lacmes-render')); });
 let tBusca; acao('forumBusca', (d, el) => { clearTimeout(tBusca); tBusca = setTimeout(() => { filtro.busca = el.value; window.dispatchEvent(new Event('lacmes-render')); }, 250); });
 
-// ------------------------------------------------------------ EXAMES ----
 const num = (s) => { if (s == null) return NaN; const t = String(s).trim().replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'); return parseFloat(t); };
 function foraDaReferencia(valor, ref) {
   const v = num(valor); if (isNaN(v) || !ref) return '';
@@ -82,7 +79,6 @@ function tabelaExame(g) {
   return `<div class="tabela-rolagem"><table class="tabela-exame"><thead><tr><th>Parâmetro</th><th>Resultado</th><th>Unidade</th>${g.mostrarRef !== false ? '<th>Referência</th>' : ''}</tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
 
-// ---------------------------------------------------------- ENQUETE ----
 function renderEnquete(p) {
   const e = p.enquete; if (!e) return '';
   const votos = (tela.votos && tela.votos[p.id]) || [];
@@ -120,7 +116,6 @@ acao('votar', async ({ post, i }) => {
 });
 acao('encerrarEnquete', ({ post }) => { const p = S.forum.find(x => x.id === post); Data.update(`forum/${post}`, { 'enquete.encerrada': !p.enquete.encerrada }); });
 
-// ------------------------------------------------------- COMENTÁRIOS ----
 function comentarioHTML(c, p, filhos) {
   const u = S.usuarios[c.autor];
   const curtiu = (c.curtidas || []).includes(S.uid);
@@ -179,7 +174,6 @@ acao('apagarComent', async ({ post, c }) => {
   Data.update(`forum/${post}`, { nComentarios: F.increment(-1) }).catch(() => { });
 });
 
-// ----------------------------------------------------------- DETALHE ----
 function renderDetalhe(id) {
   const p = S.forum.find(x => x.id === id);
   if (!p) return `${voltar()}${vazio('Publicação não encontrada ou removida.', 'forum')}`;
@@ -239,7 +233,6 @@ acao('apagarPost', async ({ post }) => {
   location.hash = '#/forum'; toast('Publicação excluída.', 'ok');
 });
 
-// ---------------------------------------------------------- CRIAÇÃO ----
 const MODELO_ANAMNESE = ['Identificação', 'Queixa principal', 'História da doença atual', 'Antecedentes pessoais', 'Antecedentes familiares', 'Hábitos de vida', 'Revisão de sistemas'];
 const MODELO_EXAME = ['Estado geral', 'Sinais vitais', 'Aparelho cardiovascular', 'Aparelho respiratório', 'Abdome', 'Neurológico', 'Extremidades'];
 
@@ -365,12 +358,19 @@ acao('salvarPost', async ({ tipo, id }, botao) => {
   } catch (e) { toast('Erro ao salvar: ' + e.message, 'erro'); botao.disabled = false; }
 });
 
-// ------------------------------------------------------------ PÁGINA ----
+function abasForum(ativa) {
+  return abas([{ id: 'posts', nome: 'Publicações e casos', icone: 'forum' }, { id: 'arquivos', nome: 'Arquivos da liga', icone: 'pasta', badge: S.arquivosLiga.length || '' }], ativa, 'abaForum');
+}
+acao('abaForum', ({ aba }) => { location.hash = aba === 'arquivos' ? '#/forum/arquivos' : '#/forum'; });
+function renderAbaArquivos() {
+  return `${cabecalho('Fórum', 'Editais de seleção, regimento, cronogramas e outros arquivos oficiais da liga.')}${abasForum('arquivos')}${renderArquivosLiga()}`;
+}
+
 export default {
   titulo: 'Fórum',
-  render: (params) => params[0] ? renderDetalhe(params[0]) : renderLista(),
+  render: (params) => params[0] === 'arquivos' ? renderAbaArquivos() : (params[0] ? renderDetalhe(params[0]) : renderLista()),
   montar(view, params) {
-    const id = params[0]; if (!id) return;
+    const id = params[0]; if (!id || id === 'arquivos') return;
     ouvirTela('coment-' + id, (avisar) => Data.watchCol(`forum/${id}/comentarios`, (l) => { tela.comentarios = { ...(tela.comentarios || {}), [id]: l }; avisar(); }));
     ouvirTela('votos-' + id, (avisar) => Data.watchCol(`forum/${id}/votos`, (l) => { tela.votos = { ...(tela.votos || {}), [id]: l }; avisar(); }));
     const pessoas = () => usuariosAtivos().map(u => ({ kind: 'user', id: u.id, label: u.nome, sub: u.cargo || '' }));

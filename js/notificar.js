@@ -1,6 +1,3 @@
-﻿// ============================================================================
-// NOTIFICAÃ‡Ã•ES â€” caixa de entrada no portal + push no celular (via Worker/FCM)
-// ============================================================================
 import { Data, F, op } from './data.js';
 import { S, usuariosAtivos } from './store.js';
 import { chamarWorker, novoId, toast } from './util.js';
@@ -8,7 +5,6 @@ import { VAPID_KEY, WORKER_URL, DEMO_MODE } from './config.js';
 
 const querNotif = (u, pref) => !pref || !u.notifPrefs || u.notifPrefs[pref] !== false;
 
-// PÃºblico: todos que aceitam `pref` + quem segue algum dos `eixos` (pref "eixos").
 export function publico({ pref, eixos, uids, todos }) {
   const ativos = usuariosAtivos();
   const alvo = new Set();
@@ -21,7 +17,6 @@ export function publico({ pref, eixos, uids, todos }) {
   return [...alvo];
 }
 
-// Grava na caixa de cada destinatÃ¡rio e dispara o push (se o Worker existir).
 export async function notificar({ tipo, titulo, corpo = '', url = '#/inicio', ...aud }) {
   const destinos = publico(aud);
   if (!destinos.length) return 0;
@@ -37,7 +32,6 @@ export async function marcarTodasLidas() {
   if (ops.length) await Data.batch(ops);
 }
 
-// --------------------------------------------------------------- PUSH ----
 export const pushSuportado = () => 'Notification' in window && 'serviceWorker' in navigator;
 export const pushStatus = () => (!pushSuportado() ? 'indisponivel' : Notification.permission);
 
@@ -67,13 +61,11 @@ export async function ativarPush() {
   }
 }
 
-// Sem FCM (modo demo ou sem Worker): mostra notificaÃ§Ã£o do sistema quando chega
-// algo novo e a aba estÃ¡ em segundo plano.
 const inicioSessao = Date.now();
 const jaMostradas = new Set();
 export async function avisoLocal(notifs) {
   if (!pushSuportado() || Notification.permission !== 'granted') return;
-  if (!DEMO_MODE && WORKER_URL && VAPID_KEY && localStorage.getItem('lacmes-push-token')) return; // o FCM cuida
+  if (!DEMO_MODE && WORKER_URL && VAPID_KEY && localStorage.getItem('lacmes-push-token')) return;
   const novas = notifs.filter(n => !n.lida && n.criadoEm > inicioSessao && !jaMostradas.has(n.id));
   if (!novas.length) return;
   novas.forEach(n => jaMostradas.add(n.id));

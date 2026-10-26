@@ -1,7 +1,3 @@
-// ============================================================================
-// OPORTUNIDADES (pesquisa, extensão, artigo, resumo, estágio), MINHAS
-// INSCRIÇÕES e PAINEL DA DIRETORIA
-// ============================================================================
 import { Data, F } from '../data.js';
 import { S, nomeDe, usuariosAtivos } from '../store.js';
 import { P, CARGOS, CATEGORIAS, categoriaBadge, eixosChips, eixoPicker, lerEixos, getFasesPadrao, EIXOS } from '../dominio.js';
@@ -9,11 +5,12 @@ import { ic, esc, acao, avatar, abrirModal, fecharModal, confirmar, toast, val, 
 import { cabecalho, vazio, btn, btnIc, campo, linhaCampos, faseTracker, faseBadge, meta, seletorPessoas, abas } from '../ui.js';
 import { notificar } from '../notificar.js';
 import { criarCertificados, horasEstagio } from '../cert.js';
+import { avisarAlteracao, mudancasEntre, botoesGestao } from '../eventos.js';
+import { anexar, iconeArquivo, botaoAbrir } from '../arquivos.js';
 
 const filtro = { tipo: 'todas', eixo: null };
 const lista = () => Object.values(S.oportunidades).sort((a, b) => (b.criadoEm || 0) - (a.criadoEm || 0));
 
-// ------------------------------------------------------- CARD PÚBLICO ----
 export function cardOportunidade(o) {
   const inscrito = (o.inscritos || []).includes(S.uid), confirmado = (o.confirmados || []).includes(S.uid);
   const fechadas = o.faseAtual > 0;
@@ -21,6 +18,7 @@ export function cardOportunidade(o) {
   let acaoHTML;
   if (confirmado) acaoHTML = `<span class="status status-fim">${ic('concluido')}Você está confirmado(a)</span>`;
   else if (inscrito) acaoHTML = btn('Cancelar inscrição', 'cancelarInscricao', { dados: { id: o.id } });
+  else if (o.cancelada) acaoHTML = `<span class="status" style="color:var(--danger)">${ic('alerta')}Cancelada</span>`;
   else if (!fechadas) acaoHTML = btn('Inscrever-se', 'inscrever', { classe: 'btn-pri', icone: 'check', dados: { id: o.id } });
   else acaoHTML = '<span class="mudo">Inscrições encerradas</span>';
   const vagas = `${(o.confirmados || []).length}/${o.vagas} vaga(s)`;
@@ -30,13 +28,14 @@ export function cardOportunidade(o) {
   const ultima = (o.atualizacoes || []).slice(-1)[0];
   return `<div class="card card-oport" style="--tc:${(CATEGORIAS[o.tipo] || {}).cor}">
     <div class="co-topo">${categoriaBadge(o.tipo)}${faseBadge(o)}</div>
+    ${o.cancelada ? `<div class="aviso-cancelado">${ic('alerta')}<div><b>Cancelada</b>${o.motivoCancelamento ? `<p>${esc(o.motivoCancelamento)}</p>` : ''}</div></div>` : ''}
     <h3>${esc(o.titulo)}</h3>
     ${eixosChips(o.eixos, { mini: true })}
     ${o.descricao ? `<p class="cp-resumo">${esc(o.descricao)}</p>` : ''}
     <div class="meta">${metaHTML}</div>
     ${faseTracker(o)}
     ${estagio && confirmado && o.orientacoes ? `<div class="aviso-ok">${ic('info')}<div><b>Orientações para você</b><p>${esc(o.orientacoes)}</p></div></div>` : ''}
-    ${ultima && (inscrito || confirmado) ? `<div class="atualizacao">${ic('sino')}<div><small>${fmtDataHora(ultima.em)} · ${esc(nomeDe(ultima.autor))}</small><p>${esc(ultima.texto)}</p>${ultima.anexoUrl ? `<a href="${esc(ultima.anexoUrl)}" target="_blank" rel="noopener">${ic('clipe')}${esc(ultima.anexoNome || 'Anexo')}</a>` : ''}</div></div>` : ''}
+    ${ultima && (inscrito || confirmado) ? `<div class="atualizacao">${ic('sino')}<div><small>${fmtDataHora(ultima.em)} · ${esc(nomeDe(ultima.autor))}</small><p>${esc(ultima.texto)}</p>${ultima.anexoUrl ? `<span class="anexo-chip">${iconeArquivo(ultima.anexoNome, ultima.anexoUrl)}<span>${esc(ultima.anexoNome || 'Anexo')}</span>${botaoAbrir(ultima.anexoUrl, ultima.anexoNome || 'anexo')}</span>` : ''}</div></div>` : ''}
     <div class="acoes-linha esq">${acaoHTML}${o.projetoId && confirmado ? `<a class="btn" href="#/projetos/${o.projetoId}/chat">${ic('pasta')}Abrir grupo</a>` : ''}</div>
   </div>`;
 }
@@ -53,7 +52,7 @@ function renderPublico() {
   let l = lista();
   if (filtro.tipo !== 'todas') l = l.filter(o => o.tipo === filtro.tipo);
   if (filtro.eixo) l = l.filter(o => (o.eixos || ['clinica']).includes(filtro.eixo));
-  const abertas = l.filter(o => o.faseAtual === 0), outras = l.filter(o => o.faseAtual > 0);
+  const abertas = l.filter(o => o.faseAtual === 0 && !o.cancelada), outras = l.filter(o => o.faseAtual > 0 || o.cancelada);
   return `${cabecalho('Oportunidades', 'Editais de pesquisa, extensão, artigos, resumos e estágios abertos pela diretoria.')}
     <div class="filtros"><div class="seg">${['todas', ...Object.keys(CATEGORIAS)].map(t => `<button class="seg-btn ${filtro.tipo === t ? 'ativo' : ''}" data-action="opFiltro" data-tipo="${t}">${t === 'todas' ? 'Todas' : t}</button>`).join('')}</div></div>
     <div class="filtro-eixos">${EIXOS.map(e => `<button class="eixo-filtro ${filtro.eixo === e.id ? 'ativo' : ''}" style="--ec:${e.c};--eb:${e.b}" data-action="opEixo" data-eixo="${e.id}">${e.svg}<span>${esc(e.nome)}</span></button>`).join('')}</div>
@@ -73,7 +72,6 @@ function renderInscricoes() {
     ${aguard.length ? `<h4 class="sec-titulo">Aguardando seleção (${aguard.length})</h4><div class="grade-cards largos">${aguard.map(cardOportunidade).join('')}</div>` : ''}`;
 }
 
-// ------------------------------------------------------------- PAINEL ----
 let cargoPainel = null;
 function cargosPainel() { return P.admin(S.eu) ? Object.keys(CARGOS).filter(c => CARGOS[c].tipos.length) : (CARGOS[S.eu.cargo]?.tipos.length ? [S.eu.cargo] : []); }
 
@@ -95,6 +93,7 @@ function cardGestao(o) {
     ${faseTracker(o)}
     <div class="acoes-linha esq">${btn('Fase anterior', 'fase', { icone: 'esq', classe: 'btn-peq', dados: { id: o.id, d: -1 } })}${btn('Próxima fase', 'fase', { icone: 'dir', classe: 'btn-peq', dados: { id: o.id, d: 1 } })}
       ${btn('Atualização', 'novaAtualizacao', { icone: 'sino', classe: 'btn-peq', dados: { id: o.id } })}
+      ${botoesGestao('oportunidade', o.id, o.cancelada)}
       ${!estagio ? (o.projetoId ? `<a class="btn btn-peq" href="#/projetos/${o.projetoId}/chat">${ic('pasta')}Abrir grupo</a>` : (o.confirmados.length ? btn('Criar grupo do projeto', 'criarGrupo', { icone: 'pasta', classe: 'btn-peq btn-pri', dados: { id: o.id } }) : '')) : ''}</div>
     <h5 class="sec-titulo">Inscritos (${(o.inscritos || []).length})</h5>${linhas || '<p class="mudo">Ninguém se inscreveu ainda.</p>'}
   </div>`;
@@ -137,7 +136,13 @@ acao('salvarOport', async ({ cargo, id }) => {
   const d = { tipo, titulo, eixos: lerEixos('no-eixos'), local: val('no-local'), vagas: Number(val('no-vagas')) || 1 };
   if (tipo === 'Estágio') Object.assign(d, { data: val('no-data'), horaInicio: val('no-ini'), horaFim: val('no-fim'), cargaHoraria: horasEntre(val('no-ini'), val('no-fim')), orientacoes: val('no-orient') });
   else Object.assign(d, { descricao: val('no-desc'), orientador: val('no-orientador'), link: val('no-link') });
-  if (id) { await Data.update(`oportunidades/${id}`, d); fecharModal(); return; }
+  if (id) {
+    const antes = S.oportunidades[id];
+    await Data.update(`oportunidades/${id}`, d);
+    fecharModal();
+    if (antes) await avisarAlteracao('oportunidade', antes, mudancasEntre('oportunidade', antes, d));
+    return;
+  }
   const nid = await Data.add('oportunidades', { ...d, criadoPorCargo: cargo, criadoPor: S.uid, fases: getFasesPadrao(tipo), faseAtual: 0, inscritos: [], confirmados: [], presencas: [], atualizacoes: [], projetoId: null, criadoEm: Date.now() });
   fecharModal(); toast('Publicado!', 'ok');
   notificar({ tipo: 'oportunidade', pref: 'oportunidades', todos: true, eixos: d.eixos, titulo: `Nova oportunidade: ${titulo}`, corpo: tipo === 'Estágio' ? `${isoParaBR(d.data)} · ${d.horaInicio}–${d.horaFim} · ${d.vagas} vaga(s)` : `${tipo} · ${d.vagas} vaga(s)`, url: '#/oportunidades' });
@@ -157,10 +162,19 @@ acao('fase', async ({ id, d }) => {
   await Data.update(`oportunidades/${id}`, { faseAtual: nova });
   notificar({ tipo: 'fase', uids: [...new Set([...(o.inscritos || []), ...o.confirmados])], titulo: `${o.titulo}: ${o.fases[nova]}`, url: '#/inscricoes' });
 });
-acao('novaAtualizacao', ({ id }) => abrirModal({ titulo: 'Publicar atualização', largura: 480, corpo: `${campo('Texto', '<textarea id="atz-texto" rows="3"></textarea>')}${linhaCampos(campo('Nome do anexo', '<input id="atz-nome">'), campo('Link do anexo', '<input id="atz-url" placeholder="https://">'))}<div class="acoes-form">${btn('Publicar', 'salvarAtualizacao', { classe: 'btn-pri', dados: { id } })}</div>` }));
-acao('salvarAtualizacao', async ({ id }) => {
+acao('novaAtualizacao', ({ id }) => abrirModal({ titulo: 'Publicar atualização', largura: 480, corpo: `${campo('Texto', '<textarea id="atz-texto" rows="3"></textarea>')}
+  ${campo('Anexar arquivo (PDF, Word, Excel, PowerPoint…)', '<input type="file" id="atz-arquivo" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.rtf,.txt,.zip,image/*">')}
+  <p class="ou"><span>ou</span></p>
+  ${linhaCampos(campo('Nome do link', '<input id="atz-nome">'), campo('Link', '<input id="atz-url" placeholder="https://">'))}
+  <div class="acoes-form">${btn('Publicar', 'salvarAtualizacao', { classe: 'btn-pri', dados: { id } })}</div>` }));
+acao('salvarAtualizacao', async ({ id }, botao) => {
   const texto = val('atz-texto'); if (!texto) return; const o = S.oportunidades[id];
-  await Data.update(`oportunidades/${id}`, { atualizacoes: [...(o.atualizacoes || []), { texto, anexoNome: val('atz-nome'), anexoUrl: val('atz-url'), em: Date.now(), autor: S.uid }] });
+  let anexoNome = val('atz-nome'), anexoUrl = val('atz-url');
+  const f = document.getElementById('atz-arquivo').files[0];
+  botao.disabled = true;
+  try { if (f) { const r = await anexar(f, { pasta: `oportunidades/${id}` }); anexoNome = r.nome; anexoUrl = r.url; } }
+  catch (e) { toast(e.message, 'erro', 7000); botao.disabled = false; return; }
+  await Data.update(`oportunidades/${id}`, { atualizacoes: [...(o.atualizacoes || []), { texto, anexoNome, anexoUrl, em: Date.now(), autor: S.uid }] });
   fecharModal();
   notificar({ tipo: 'atualizacao', uids: [...new Set([...(o.inscritos || []), ...o.confirmados])], titulo: `Atualização: ${o.titulo}`, corpo: texto.slice(0, 100), url: '#/inscricoes' });
 });

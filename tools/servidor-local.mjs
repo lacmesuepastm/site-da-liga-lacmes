@@ -1,5 +1,3 @@
-// Servidor local para testar o site antes de publicar:  node tools/servidor-local.mjs
-// Depois abra http://localhost:5173  (sem config do Firebase → modo demonstração)
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';

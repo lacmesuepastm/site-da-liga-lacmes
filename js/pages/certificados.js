@@ -1,7 +1,3 @@
-// ============================================================================
-// CERTIFICADOS — meus certificados, fila de assinatura (Presidência e
-// Orientador[a]) e gestão/emissão pela Presidência
-// ============================================================================
 import { Data } from '../data.js';
 import { S, nomeDe, usuariosAtivos } from '../store.js';
 import { P, LISTA_CARGOS } from '../dominio.js';
@@ -9,7 +5,7 @@ import { ic, esc, acao, abrirModal, fecharModal, confirmar, toast, val, opcoes, 
 import { cabecalho, vazio, btn, btnIc, campo, linhaCampos, abas, meta, seletorPessoas } from '../ui.js';
 import { STATUS, assinarPresidencia, assinarOrientador, devolver, reenviar, cancelar, enviarManual, baixar, previa, criarCertificados, cargaTotal } from '../cert.js';
 
-let temAssinatura = null; // cache: minha assinatura cadastrada?
+let temAssinatura = null;
 const filtroGestao = { status: 'todos', busca: '' };
 
 function passos(c) {
@@ -148,7 +144,6 @@ acao('configAssin', () => {
 });
 acao('configAssinOk', async () => { await Data.set('config/geral', { presidenteUid: val('cf-pres'), orientadoraUid: val('cf-ori') || null, orientadoraNome: val('cf-ori-nome') }, { merge: true }); fecharModal(); toast('Configuração salva.', 'ok'); });
 
-// Emissão em massa para membros/diretores (antigo "Gerar Certificado")
 acao('emitirMembros', () => abrirModal({ titulo: 'Emitir certificados — selecionar pessoas', largura: 560, corpo: `${seletorPessoas('em-uids', usuariosAtivos().filter(u => u.tipo !== 'orientador').map(u => u.id), [], { todosOpcao: true })}<div class="acoes-form">${btn('Continuar', 'emitirPasso2', { classe: 'btn-pri', icone: 'dir' })}</div>` }));
 acao('emitirPasso2', () => {
   const uids = [...document.querySelectorAll('input[name="em-uids"]:checked')].map(i => i.value); if (!uids.length) return;

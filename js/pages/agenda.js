@@ -1,10 +1,8 @@
-// ============================================================================
-// AGENDA — compromissos em grade (manhã / tarde / noite), mês e lista
-// ============================================================================
 import { Data } from '../data.js';
 import { S } from '../store.js';
 import { ic, esc, acao, abrirModal, fecharModal, confirmar, toast, val, opcoes, hojeISO, somarDias, inicioSemana, dataDeISO, isoDe, isoParaBR, dataExtensa, DIAS_CURTOS, MESES, periodoDe, rerender, debounce } from '../util.js';
 import { cabecalho, vazio, btn, btnIc, campo, linhaCampos, chk } from '../ui.js';
+import { podeGerirPublicado, lerPublicado, botoesGestao } from '../eventos.js';
 
 const CAT_EVENTO = {
   'Aula da Liga': { cor: '#4c51bf', icone: 'livro' }, 'Aula ou Estágio Regular': { cor: '#0987a0', icone: 'maleta' },
@@ -19,13 +17,16 @@ const PERIODOS = [
 ];
 const estado = { visao: 'semana', base: null };
 
-// Reúne tudo que é compromisso do usuário no intervalo [ini, fim]
 export function compromissos(ini, fim) {
   const r = [], uid = S.uid;
   const dentro = (d) => d && d >= ini && d <= fim;
-  S.aulas.forEach(a => { if ((a.seguidores || []).includes(uid) && dentro(a.data)) r.push({ tipo: 'Aula', cor: '#6b46c1', icone: 'livro', titulo: a.titulo, data: a.data, hora: a.hora, local: a.local, url: '#/aulas' }); });
+  S.aulas.forEach(a => { if (!a.cancelada && (a.seguidores || []).includes(uid) && dentro(a.data)) r.push({ tipo: 'Aula', cor: '#6b46c1', icone: 'livro', titulo: a.titulo, data: a.data, hora: a.hora, local: a.local, url: '#/aulas', dest: 'aula', pubId: a.id }); });
+  S.eventosLiga.forEach(e => {
+    const part = e.participantes || [];
+    if (!e.cancelada && (!part.length || part.includes(uid)) && dentro(e.data)) r.push({ tipo: e.categoria || 'Evento', cor: e.categoria === 'Reunião' ? '#0d9488' : '#AB9748', icone: e.categoria === 'Reunião' ? 'reuniao' : 'estrela', titulo: e.titulo, data: e.data, hora: e.hora, horaFim: e.horaFim, local: e.local || (e.link ? 'Online' : ''), link: e.link, url: '', dest: 'evento', pubId: e.id });
+  });
   Object.values(S.oportunidades).forEach(o => {
-    if (o.tipo === 'Estágio' && (o.confirmados || []).includes(uid) && dentro(o.data)) r.push({ tipo: 'Estágio', cor: '#b7791f', icone: 'maleta', titulo: o.titulo, data: o.data, hora: o.horaInicio, horaFim: o.horaFim, local: o.local, url: '#/inscricoes', extra: o.orientacoes });
+    if (o.tipo === 'Estágio' && !o.cancelada && (o.confirmados || []).includes(uid) && dentro(o.data)) r.push({ tipo: 'Estágio', cor: '#b7791f', icone: 'maleta', titulo: o.titulo, data: o.data, hora: o.horaInicio, horaFim: o.horaFim, local: o.local, url: '#/inscricoes', extra: o.orientacoes, dest: 'oportunidade', pubId: o.id });
   });
   Object.values(S.projetos).forEach(p => {
     if (!(p.membroIds || []).includes(uid)) return;
@@ -123,7 +124,7 @@ acao('verCompromisso', ({ k }) => {
   abrirModal({ titulo: c.titulo, largura: 440, corpo: `<div class="det-comp" style="--c:${c.cor}"><span class="tag-linha" style="--tc:${c.cor}">${ic(c.icone)}${esc(c.tipo)}</span>
     <div class="meta">${`<span class="meta-item">${ic('calendario')}${dataExtensa(c.data)}</span>`}${c.hora ? `<span class="meta-item">${ic('relogio')}${esc(c.hora)}${c.horaFim ? '–' + esc(c.horaFim) : ''}</span>` : ''}${c.local ? `<span class="meta-item">${ic('local')}${esc(c.local)}</span>` : ''}</div>
     ${c.extra ? `<div class="aviso-ok">${ic('info')}<p>${esc(c.extra)}</p></div>` : ''}${c.repetido ? '<p class="mudo pequeno">Repete toda semana.</p>' : ''}
-    <div class="acoes-form">${c.eventoId ? btn('Excluir', 'apagarEvento', { classe: 'btn-perigo-txt', icone: 'lixeira', dados: { id: c.eventoId } }) + btn('Editar', 'editarEvento', { icone: 'lapis', dados: { id: c.eventoId } }) : ''}
+    <div class="acoes-form">${c.dest && podeGerirPublicado(c.dest, lerPublicado(c.dest, c.pubId)) ? botoesGestao(c.dest, c.pubId, false, '') : ''}${c.eventoId ? btn('Excluir', 'apagarEvento', { classe: 'btn-perigo-txt', icone: 'lixeira', dados: { id: c.eventoId } }) + btn('Editar', 'editarEvento', { icone: 'lapis', dados: { id: c.eventoId } }) : ''}
       ${c.link ? `<a class="btn" href="${esc(c.link)}" target="_blank" rel="noopener">${ic('reuniao')}Entrar</a>` : ''}${c.url ? `<a class="btn btn-pri" href="${c.url}" data-action="fecharModal">Abrir ${ic('dir')}</a>` : ''}</div></div>` });
 });
 

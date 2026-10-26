@@ -1,7 +1,3 @@
-// ============================================================================
-// EDITOR DE TEXTO FORMATADO (negrito, itálico, sublinhado, listas, imagens…)
-// e MENÇÕES com "@" (pessoas, arquivos, datas e tarefas).
-// ============================================================================
 import { ic, esc, sanitizar, textoPuro, acao, enviarArquivo, toast } from './util.js';
 
 const BOTOES = [
@@ -28,7 +24,6 @@ export function lerEditor(id) {
   return (textoPuro(html).trim() || /<img/i.test(html)) ? html : '';
 }
 
-// mantém a seleção ao clicar na barra
 document.addEventListener('mousedown', (e) => { if (e.target.closest('.editor-btn')) e.preventDefault(); });
 
 acao('editorCmd', ({ cmd, alvo }) => {
@@ -80,7 +75,6 @@ function atualizarBarra() {
 }
 document.addEventListener('selectionchange', atualizarBarra);
 
-// colar: mantém só a formatação permitida
 document.addEventListener('paste', (e) => {
   const area = e.target.closest && e.target.closest('[contenteditable="true"]');
   if (!area) return;
@@ -91,8 +85,6 @@ document.addEventListener('paste', (e) => {
   else document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
 });
 
-// ---------------------------------------------------------- MENÇÕES ----
-// fontes() → [{ kind: 'user'|'file'|'date'|'task', id, label, sub }]
 const ICONE_KIND = { user: 'usuario', file: 'clipe', date: 'calendario', task: 'tarefa' };
 const GRUPO_KIND = { user: 'Pessoas', file: 'Arquivos', date: 'Datas', task: 'Tarefas' };
 
