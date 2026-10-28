@@ -13,7 +13,7 @@ function render() {
   const tarefas = meusProjetos().flatMap(p => (p.tarefas || []).filter(t => !t.concluida && (t.resp || []).includes(S.uid)).map(t => ({ ...t, p }))).sort((a, b) => (a.prazo || '9').localeCompare(b.prazo || '9')).slice(0, 5);
   const abertas = Object.values(S.oportunidades).filter(o => o.faseAtual === 0 && !(o.inscritos || []).includes(S.uid)).sort((a, b) => b.criadoEm - a.criadoEm).slice(0, 4);
   const forum = S.forum.filter(p => p.id !== caso?.id).slice(0, 4);
-  const assinar = S.certificados.filter(c => (c.status === 'pendente_presidencia' && P.admin(eu)) || (c.status === 'pendente_orientador' && c.signerUid === S.uid)).length;
+  const solicitados = P.admin(eu) ? S.certificados.filter(c => c.status === 'solicitado').length : 0;
 
   const planejados = P.planejar(eu) ? S.planejamento.filter(p => (p.status || 'planejado') === 'planejado') : [];
   const semData = planejados.filter(p => !p.data).length, atrasados = planejados.filter(p => p.data && p.data < hoje).length;
@@ -23,7 +23,7 @@ function render() {
         : vazio('Nada planejado no momento. Comece pelo botão "Novo planejamento".', 'plano')}</section>` : '';
 
   return `<div class="inicio-cab"><div><p class="mudo">${saudacao()},</p><h2>${esc(eu.nome.split(' ')[0])}</h2></div>${eixosChips(eu.eixosSeguidos, { mini: true })}</div>
-    ${assinar ? `<a class="aviso link-aviso" href="#/certificados/assinar">${ic('caneta')}<div><b>${assinar} certificado(s) aguardando sua assinatura.</b> Toque para assinar.</div>${ic('dir')}</a>` : ''}
+    ${solicitados ? `<a class="aviso link-aviso" href="#/certificados/solicitacoes">${ic('certificado')}<div><b>${solicitados} certificado(s) solicitado(s).</b> Monte o lote e envie aos alunos.</div>${ic('dir')}</a>` : ''}
     <div class="painel-inicio">
       ${blocoPlano}
       <section class="bloco"><div class="bloco-cab"><h4>${ic('calendario')} Próximos 7 dias</h4><a href="#/agenda" class="link">Agenda ${ic('dir')}</a></div>

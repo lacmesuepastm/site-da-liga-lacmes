@@ -114,8 +114,8 @@ window.addEventListener('lacmes-render', () => renderizar(false));
 
 function contadorPendencias() {
   const eu = S.eu;
-  const assinar = S.certificados.filter(c => (c.status === 'pendente_presidencia' && P.admin(eu)) || (c.status === 'pendente_orientador' && c.signerUid === S.uid)).length;
-  return { certificados: assinar };
+  const solicitados = P.admin(eu) ? S.certificados.filter(c => c.status === 'solicitado').length : 0;
+  return { certificados: solicitados };
 }
 function desenharMenu() {
   const eu = S.eu; if (!eu) return;

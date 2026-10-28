@@ -5,13 +5,15 @@ import { ic, esc, acao, avatar, toast, val, enviarArquivo, comprimirImagem, blob
 import { cabecalho, btn, campo, linhaCampos } from '../ui.js';
 import { ativarPush, pushStatus } from '../notificar.js';
 import { resetarCacheAssinatura } from './certificados.js';
+import { cpfDe, cpfValido, formatarCPF, soDigitos } from '../cert.js';
 import { DEMO_MODE } from '../config.js';
 
-let assinaturaAtual;
+let assinaturaAtual, cpfAtual;
 
 function render(params) {
   const u = S.eu; const prefs = { ...prefsPadrao(), ...(u.notifPrefs || {}) };
   const assina = P.admin(u) || P.orientador(u);
+  if (cpfAtual === undefined) cpfDe(S.uid).then(c => { cpfAtual = c; rerender(); });
   if (assina && assinaturaAtual === undefined) Data.getDoc(`assinaturas/${S.uid}`).then(d => { assinaturaAtual = (d && d.img) || null; rerender(); });
   const status = pushStatus();
   return `${cabecalho('Meu perfil')}
@@ -24,7 +26,8 @@ function render(params) {
       <h3>${esc(u.nome)}</h3><p class="mudo">${esc(u.email)}</p>
       <div class="linha-chk centro"><span class="pill">${TIPOS_USUARIO[u.tipo]}</span>${u.cargo ? cargoBadge(u.cargo) : ''}</div>
       <p class="mudo pequeno">Login rápido: <code>${esc(u.username || '—')}</code></p>
-      <div class="perfil-form">${campo('Titulação', `<input id="pf-tit" value="${esc(u.titulacao || '')}">`)}${campo('Vínculo', `<input id="pf-vinc" value="${esc(u.vinculo || '')}">`)}${btn('Salvar dados', 'salvarPerfil', { classe: 'btn-peq' })}</div>
+      <div class="perfil-form">${campo('Titulação', `<input id="pf-tit" value="${esc(u.titulacao || '')}">`)}${campo('Vínculo', `<input id="pf-vinc" value="${esc(u.vinculo || '')}">`)}
+        ${campo('CPF (aparece nos seus certificados)', `<input id="pf-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" value="${esc(formatarCPF(cpfAtual || ''))}" data-input="cwCpf">`, 'Só você e a Presidência veem.')}${btn('Salvar dados', 'salvarPerfil', { classe: 'btn-peq' })}</div>
     </section>
 
     <section class="card">
@@ -76,7 +79,14 @@ acao('trocarFoto', async (d, input) => {
   catch (e) { toast(e.message, 'erro'); }
 });
 acao('removerFoto', async () => { await Data.update(`usuarios/${S.uid}`, { foto: '' }); toast('Foto removida.', 'ok'); });
-acao('salvarPerfil', async () => { await Data.update(`usuarios/${S.uid}`, { titulacao: val('pf-tit'), vinculo: val('pf-vinc') }); toast('Dados salvos.', 'ok'); });
+acao('salvarPerfil', async () => {
+  const cpf = soDigitos(val('pf-cpf'));
+  if (cpf && !cpfValido(cpf)) { toast('CPF inválido. Confira os números.', 'erro'); return; }
+  await Data.update(`usuarios/${S.uid}`, { titulacao: val('pf-tit'), vinculo: val('pf-vinc') });
+  await Data.set(`dadosPessoais/${S.uid}`, { cpf }, { merge: true });
+  cpfAtual = cpf;
+  toast('Dados salvos.', 'ok');
+});
 acao('salvarEixos', async () => { await Data.update(`usuarios/${S.uid}`, { eixosSeguidos: lerEixos('pf-eixos') }); toast('Eixos atualizados.', 'ok'); });
 acao('pref', ({ id }, el) => Data.update(`usuarios/${S.uid}`, { [`notifPrefs.${id}`]: el.checked }));
 acao('ativarPush', async () => { await ativarPush(); rerender(); });

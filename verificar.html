@@ -43,7 +43,8 @@
         const d = await buscar(codigo);
         r.innerHTML = d && d.status === 'valido' ? `<div class="card res"><div class="selo ok">✓ Certificado autêntico</div><dl>
           <dt>Nome</dt><dd>${esc(d.nome)}</dd><dt>Certificado</dt><dd>${esc(d.titulo)}</dd><dt>Carga horária</dt><dd>${esc(d.cargaHoraria)} horas</dd>
-          <dt>Emitido em</dt><dd>${new Date(d.emitidoEm).toLocaleDateString('pt-BR')}</dd>${d.presidente ? `<dt>Presidência</dt><dd>${esc(d.presidente)}</dd>` : ''}${d.orientador ? `<dt>Orientação</dt><dd>${esc(d.orientador)}</dd>` : ''}<dt>Código</dt><dd><code>${esc(codigo)}</code></dd></dl></div>`
+          ${d.cpf ? `<dt>CPF</dt><dd>${esc(d.cpf)}</dd>` : ''}<dt>Emitido em</dt><dd>${new Date(d.emitidoEm).toLocaleDateString('pt-BR')}</dd>${(d.signatarios || []).length ? `<dt>Assinado por</dt><dd>${d.signatarios.map(esc).join('<br>')}</dd>` : ''}<dt>Código</dt><dd><code>${esc(codigo)}</code></dd></dl></div>`
+          : d && d.status === 'cancelado' ? `<div class="card res"><div class="selo nao">✕ Certificado cancelado</div><p class="mudo" style="margin-top:8px">Este certificado foi cancelado pela LACMES.</p></div>`
           : `<div class="card res"><div class="selo nao">✕ Código não encontrado</div><p class="mudo" style="margin-top:8px">Confira se digitou corretamente. Em caso de dúvida, contate a LACMES.</p></div>`;
       } catch (e) { r.innerHTML = `<p class="txt-perigo">Erro na consulta: ${esc(e.message)}</p>`; }
     }

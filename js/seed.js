@@ -115,7 +115,11 @@ export function popularDemo(Data) {
       pl4: { titulo: 'Revisão sistemática em IC', categoria: 'Escrita', subtipo: 'Artigo', eixos: ['cardio'], docente: 'Profa. Camila Reis', data: '', hora: '', horaFim: '', local: '', link: '', certifica: true, cargaHoraria: 20, vagas: 4, orientacoes: '', descHtml: '<p>Revisão com submissão prevista para o próximo semestre.</p>', notasInternas: 'Verificar periódicos-alvo.', participantes: [], cargos: ['Diretor de Pesquisa'], status: 'planejado', criadoPor: 'u3', criadoEm: agora - 3 * dia }
     },
     certificados: {
-      ce1: { userId: 'u9', nomeMembro: 'Pedro Henrique Nogueira', tipo: 'Aula', titulo: 'Participação em Aula — Distúrbios Hidroeletrolíticos', cargoTexto: 'Distúrbios Hidroeletrolíticos', cargaHoraria: 2, status: 'pendente_presidencia', signerUid: 'u11', signerNome: 'Dra. Andrea Leal Novaes', signerCargo: 'Orientadora — LACMES', criadoPor: 'u4', criadoEm: agora - 6 * dia, historico: [{ em: agora - 6 * dia, por: 'u4', acao: 'Criado' }], codigo: 'LAC-7Q2M-K9XD' }
+      ce1: { userId: 'u9', nomeMembro: 'Pedro Henrique Nogueira', cpf: '', papel: 'Participante', refKind: 'aula', refId: 'au2', atividade: 'Distúrbios Hidroeletrolíticos', cargaHoraria: 2, status: 'solicitado', solicitadoPor: 'u4', criadoPor: 'u4', criadoEm: agora - 6 * dia, historico: [{ em: agora - 6 * dia, por: 'u4', acao: 'Solicitado' }] },
+      ce2: { userId: 'u10', nomeMembro: 'Júlia Martins Rêgo', cpf: '', papel: 'Participante', refKind: 'aula', refId: 'au2', atividade: 'Distúrbios Hidroeletrolíticos', cargaHoraria: 2, status: 'solicitado', solicitadoPor: 'u4', criadoPor: 'u4', criadoEm: agora - 6 * dia, historico: [{ em: agora - 6 * dia, por: 'u4', acao: 'Solicitado' }] }
+    },
+    dadosPessoais: {
+      u9: { cpf: '52998224725' }
     },
     'usuarios/u9/notificacoes': {
       n1: { tipo: 'estagio', titulo: 'Amanhã: Estágio de Observação — Ambulatório de Cardiologia', corpo: '08:00 · Hospital Regional do Baixo Amazonas', url: '#/agenda', lida: false, criadoEm: agora - 30 * min }

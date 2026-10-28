@@ -5,7 +5,7 @@ import { debounce } from './util.js';
 export const S = {
   uid: null, eu: null,
   usuarios: {}, projetos: {}, oportunidades: {},
-  aulas: [], forum: [], financeiro: [], atas: [], certificados: [],
+  aulas: [], forum: [], financeiro: [], atas: [], certificados: [], lotes: [],
   config: {}, eventos: [], eventosLiga: [], notificacoes: [], planejamento: [], arquivosLiga: [], documentos: [],
   carregado: false
 };
@@ -59,18 +59,17 @@ function iniciarPapel() {
 
   if (P.admin(eu)) {
     subsPapel.push(Data.watchCol('certificados', (l) => { S.certificados = l.sort(ordenarDesc); avisar(); }));
+    subsPapel.push(Data.watchCol('lotesCert', (l) => { S.lotes = l.sort(ordenarDesc); avisar(); }));
   } else {
-    let meus = [], paraAssinar = [];
-    const juntar = () => { const m = new Map(); [...meus, ...paraAssinar].forEach(c => m.set(c.id, c)); S.certificados = [...m.values()].sort(ordenarDesc); avisar(); };
-    subsPapel.push(Data.watchCol('certificados', (l) => { meus = l; juntar(); }, { where: [['userId', '==', S.uid]] }));
-    if (P.orientador(eu)) subsPapel.push(Data.watchCol('certificados', (l) => { paraAssinar = l; juntar(); }, { where: [['signerUid', '==', S.uid]] }));
+    subsPapel.push(Data.watchCol('certificados', (l) => { S.certificados = l.sort(ordenarDesc); avisar(); }, { where: [['userId', '==', S.uid]] }));
+    S.lotes = [];
   }
 }
 
 export function pararStore() {
   subs.forEach(u => u()); subsPapel.forEach(u => u());
   subs = []; subsPapel = []; papelAtual = '';
-  Object.assign(S, { uid: null, eu: null, usuarios: {}, projetos: {}, oportunidades: {}, aulas: [], forum: [], financeiro: [], atas: [], certificados: [], config: {}, eventos: [], eventosLiga: [], notificacoes: [], planejamento: [], arquivosLiga: [], documentos: [], carregado: false });
+  Object.assign(S, { uid: null, eu: null, usuarios: {}, projetos: {}, oportunidades: {}, aulas: [], forum: [], financeiro: [], atas: [], certificados: [], lotes: [], config: {}, eventos: [], eventosLiga: [], notificacoes: [], planejamento: [], arquivosLiga: [], documentos: [], carregado: false });
 }
 
 let subsTela = {};

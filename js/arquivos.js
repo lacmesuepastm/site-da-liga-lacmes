@@ -42,7 +42,7 @@ export function botaoAbrir(url, nome, rotulo = 'Abrir') {
   return `<a class="btn btn-peq" href="${esc(url)}" target="_blank" rel="noopener">${ic('olho')}<span>${esc(rotulo)}</span></a>`;
 }
 
-export async function anexar(file, { pasta = 'geral', restrito = false } = {}) {
+export async function anexar(file, { pasta = 'geral', restrito = false, dono = null } = {}) {
   if (WORKER_URL) {
     const url = await enviarArquivo(file, pasta);
     return { url, nome: file.name, tipo: file.type, tam: file.size };
@@ -52,8 +52,12 @@ export async function anexar(file, { pasta = 'geral', restrito = false } = {}) {
   if (blob.size > LIMITE_LOCAL) throw new Error(`Arquivo maior que ${Math.round(LIMITE_LOCAL / 1024)} KB. Use um link do Google Drive ou publique o Cloudflare Worker (aceita até 15 MB).`);
   const data = await blobParaDataURL(blob);
   const tipo = ehImagem ? 'image/jpeg' : (file.type || 'application/octet-stream');
-  const id = await Data.add('anexos', { data, nome: file.name, tipo, tam: blob.size, restrito, por: S.uid, criadoEm: Date.now() });
+  const id = await Data.add('anexos', { data, nome: file.name, tipo, tam: blob.size, restrito, dono: dono || null, por: S.uid, criadoEm: Date.now() });
   return { url: 'anexo:' + id, nome: file.name, tipo, tam: blob.size };
+}
+
+export async function anexarBlob(blob, nome, opcoes = {}) {
+  return anexar(new File([blob], nome, { type: blob.type || 'application/pdf' }), opcoes);
 }
 
 export async function abrirArquivo(url, nome) {

@@ -121,21 +121,21 @@ Sem o Worker o portal funciona, mas: não há push com o app fechado (só avisos
 
 ---
 
-## 7. Fluxo dos certificados
+## 7. Certificados (lotes, CPF, assinaturas à sua escolha)
 
-```
-Diretoria solicita  →  Presidência assina  →  Orientador(a) assina  →  PDF emitido + código de verificação
-                  (devolver com motivo em qualquer etapa → corrigir → reenviar)
-```
+**Quem cria:** a Presidência. Os diretores só *solicitam* certificados (botão "Certificar" em aulas, projetos e estágios); os pedidos caem em **Certificados → Solicitações**.
 
-- **Assinatura eletrônica**: Presidência e orientadores desenham/enviam a assinatura uma vez em *Meu perfil → Assinatura*. Ao assinar em lote, o PDF final é gerado no navegador com as duas assinaturas, guardado (R2 ou Firestore) e o membro é notificado.
-- **Fluxo manual** (orientador sem conta, ou assinatura física): em cada etapa, *Enviar PDF assinado à mão*.
-- **Verificação pública**: todo certificado tem um código `LAC-XXXX-XXXX` e o link `verificar.html?c=…`.
-- **O membro acompanha** cada etapa em tempo real em *Certificados*.
-- Origem das cargas: aulas (com chamada), estágios (com presença), projetos concluídos e emissão para membros/diretoria (carga sugerida automaticamente).
+**Novo lote** (Certificados → Novo lote):
+1. **Atividade**: escolha o tipo (aula, evento/reunião, ação/extensão/pesquisa, projeto, estágio, atividade livre ou atuação como membro/diretoria) e, se quiser, selecione um item já cadastrado: título, data, local e carga horária são preenchidos, e *sugerir pela atividade* traz os participantes (e o docente como palestrante).
+2. **Quem recebe**: membros da liga (CPF vem do cadastro da pessoa, em Meu perfil), a **orientadora como palestrante** (escolha o papel *Palestrante*), pessoas de fora da liga (uma a uma ou colando uma lista, "nome; CPF") e papel e carga horária de cada um.
+3. **Quem assina**: você decide os nomes e títulos (até 4), que saem embaixo da linha de assinatura. Há atalhos com presidência, orientadora e diretores.
+4. Escolha como entregar:
+   - **Emitir digitalmente agora**: gera um PDF por pessoa (com sua assinatura cadastrada, se você for signatário), guarda e avisa os membros. Sem passar pela orientadora.
+   - **Gerar PDF para assinar**: baixa um PDF único com todos os certificados. Imprima, assine, digitalize e, na página do lote, envie o PDF único assinado (separado automaticamente por página, na ordem da lista) ou o PDF assinado de cada pessoa.
 
----
+**Modelo do certificado:** Times New Roman, azul, branco e amarelo, brasão da Liga, CPF, carga horária, ícones de data, local e horas, código de verificação e página pública `verificar.html` (mostra o CPF só parcialmente).
 
+**CPF:** cada pessoa informa em *Meu perfil*; só ela e a Presidência veem (coleção `dadosPessoais`).
 ## 7b. Planejamento (rascunho da diretoria)
 
 Menu **Planejamento**: a Presidência vê tudo; cada diretor vê só as categorias do seu cargo (Aula/Hands-on → Ensino · Pesquisa e Escrita → Pesquisa · Extensão → Extensão · Estágio → Estágios · Reunião → Vice/Secretaria · Evento → Comunicação e Ensino · Outro → qualquer diretor).
@@ -172,7 +172,7 @@ js/data.js            camada de dados (Firebase ou demonstração)
 js/store.js           estado em tempo real
 js/dominio.js         eixos, categorias, cargos e permissões
 js/editor.js          editor (negrito, itálico, sublinhado, imagens) e @menções
-js/cert.js            fluxo e PDF dos certificados
+js/cert.js            lotes, CPF e PDF dos certificados
 js/notificar.js       caixa de notificações + push
 js/pages/*.js         páginas
 worker/               Cloudflare Worker
@@ -182,7 +182,7 @@ tools/                servidor local de teste
 
 ### Coleções do Firestore
 
-`usuarios` (+ `notificacoes`, `eventos`) · `logins` · `tokens` · `assinaturas` · `projetos` (+ `mensagens`) · `forum` (+ `comentarios`, `votos`) · `oportunidades` · `aulas` · `financeiro` · `atas` · `certificados` · `certificados_pdf` · `verificacoes` · `config`
+`usuarios` (+ `notificacoes`, `eventos`) · `logins` · `tokens` · `assinaturas` · `projetos` (+ `mensagens`) · `forum` (+ `comentarios`, `votos`) · `oportunidades` · `aulas` · `financeiro` · `atas` · `certificados` · `lotesCert` · `dadosPessoais` · `verificacoes` · `config`
 
 ### Eixos
 

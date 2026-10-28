@@ -97,7 +97,7 @@ acao('certificarAula', ({ id }) => {
   const base = a.presentes || a.seguidores || [];
   const pend = base.filter(u => !(a.certificadosEnviados || []).includes(u) && S.usuarios[u]);
   if (!pend.length) { toast('Todos os participantes já foram certificados.', 'info'); return; }
-  abrirModal({ titulo: `Certificar — ${a.titulo}`, largura: 520, corpo: `<p class="mudo">Carga: <b>${a.cargaHoraria || 0}h</b>. Os certificados vão para a fila de assinatura.</p>${seletorPessoas('ca-uids', pend, pend, { todosOpcao: true })}
+  abrirModal({ titulo: `Certificar — ${a.titulo}`, largura: 520, corpo: `<p class="mudo">Carga: <b>${a.cargaHoraria || 0}h</b>. Os pedidos vão para a Presidência, que monta o lote e envia aos alunos.</p>${seletorPessoas('ca-uids', pend, pend, { todosOpcao: true })}
     <div class="acoes-form">${btn('Cancelar', 'fecharModal')}${btn('Gerar certificados', 'gerarCertAula', { classe: 'btn-pri', icone: 'certificado', dados: { id } })}</div>` });
 });
 acao('gerarCertAula', async ({ id }) => {
@@ -105,7 +105,7 @@ acao('gerarCertAula', async ({ id }) => {
   const uids = [...document.querySelectorAll('input[name="ca-uids"]:checked')].map(i => i.value); if (!uids.length) return;
   await criarCertificados(uids.map(userId => ({ userId, tipo: 'Aula', cargaHoraria: a.cargaHoraria || 0, cargoTexto: a.titulo, aulaId: id })));
   await Data.update(`aulas/${id}`, { certificadosEnviados: [...new Set([...(a.certificadosEnviados || []), ...uids])] });
-  fecharModal(); toast(`${uids.length} certificado(s) enviados para assinatura.`, 'ok');
+  fecharModal(); toast(`${uids.length} certificado(s) solicitado(s) à Presidência.`, 'ok');
 });
 
 export default { titulo: 'Aulas', render };

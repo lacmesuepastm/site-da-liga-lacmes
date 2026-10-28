@@ -3,7 +3,6 @@ import { S } from '../store.js';
 import { P, LISTA_CARGOS, TIPOS_USUARIO, cargoBadge, prefsPadrao, eixosChips, eixoPicker, lerEixos } from '../dominio.js';
 import { ic, esc, acao, avatar, abrirModal, fecharModal, confirmar, toast, val, opcoes, brParaISO, novoId, rerender } from '../util.js';
 import { cabecalho, vazio, btn, btnIc, campo, linhaCampos } from '../ui.js';
-import { tituloCert } from '../cert.js';
 
 const busca = { q: '', tipo: 'todos' };
 
@@ -90,7 +89,6 @@ function resumoMigracao() {
     <div class="acoes-linha esq">${btn('Importar agora', 'migImportar', { classe: 'btn-pri', icone: 'subir' })}</div><pre id="mig-log" class="log">${esc(logMig)}</pre>`;
 }
 const AREA_EIXO = { 'cardiologia': 'cardio', 'pneumologia': 'pneumo', 'neurologia': 'neuro', 'endocrinologia': 'endocrino', 'nefrologia': 'nefro', 'gastroenterologia': 'gastro', 'reumatologia': 'reumato', 'infectologia': 'infecto', 'hematologia': 'hemato', 'geriatria': 'geriatria', 'emergência': 'emergencia', 'emergencias': 'emergencia', 'emergências': 'emergencia' };
-const STATUS_ANTIGO = { nao_assinado: 'pendente_presidencia', enviado_orientadora: 'pendente_orientador', assinado: 'emitido' };
 let antigo = null;
 function lerAntigo(txt) {
   txt = txt.trim();
@@ -165,11 +163,20 @@ acao('migImportar', async (d, b) => {
     (antigo.financeiro || []).forEach(f => ops.push(op.set(`financeiro/${f.id}`, { tipo: f.tipo, descricao: f.descricao, valor: Number(f.valor) || 0, data: brParaISO(f.data), criadoEm: agora })));
     (antigo.atasGerais || []).forEach(a => ops.push(op.set(`atas/${a.id}`, { titulo: a.titulo, data: brParaISO(a.data), resumoHtml: a.resumo ? `<p>${esc(a.resumo)}</p>` : '', link: a.linkAta || '', criadoEm: agora })));
     Object.entries(antigo.eventosPessoais || {}).forEach(([uidAnt, evs]) => { const uid = mapa[uidAnt]; if (uid) (evs || []).forEach(ev => ops.push(op.set(`usuarios/${uid}/eventos/${ev.id}`, { titulo: ev.titulo, data: brParaISO(ev.data), horaInicio: ev.horaInicio || '', horaFim: ev.horaFim || '', categoria: ev.categoria || 'Outros', subcategoria: ev.subcategoria || null, projetoId: ev.projetoId ? 'p' + ev.projetoId : null, criadoEm: agora }))); });
-    (antigo.certificados || []).forEach(c => { const uid = mapa[c.userId]; if (!uid) return; const tipo = c.tipo === 'Estagio' ? 'Estagio' : c.tipo; ops.push(op.set(`certificados/${c.id}`, {
-      userId: uid, nomeMembro: c.nomeMembro, tipo, cargaHoraria: c.cargaHoraria || 0, cargoTexto: c.cargoTexto || '', projetoId: c.projetoId ? 'p' + c.projetoId : null, periodoInicio: c.periodoInicio || null, periodoFim: c.periodoFim || null,
-      titulo: tituloCert(tipo, c.cargoTexto), signerUid: S.config.orientadoraUid || null, signerNome: c.orientadoraNome || S.config.orientadoraNome || '', signerCargo: c.orientadoraCargo || 'Orientadora — LACMES',
-      status: STATUS_ANTIGO[c.status] || 'pendente_presidencia', urlPresManual: c.urlPresidente || null, pdfUrl: c.urlFinal || null, codigo: 'LAC-' + c.id.slice(-8).toUpperCase(), criadoPor: S.uid, criadoEm: agora, emitidoEm: c.status === 'assinado' ? agora : null,
-      historico: [{ em: agora, por: S.uid, acao: 'Importado do sistema antigo' }] })); });
+    (antigo.certificados || []).forEach(c => {
+      const uid = mapa[c.userId]; if (!uid) return;
+      const refKind = ({ Projeto: 'projeto', Aula: 'aula', Estagio: 'estagio', Diretor: 'membro', Membro: 'membro' })[c.tipo] || 'livre';
+      const papel = c.tipo === 'Diretor' ? 'Diretor(a) da LACMES' : (c.tipo === 'Membro' ? 'Membro da LACMES' : 'Participante');
+      const emitido = c.status === 'assinado' && !!c.urlFinal;
+      ops.push(op.set(`certificados/${c.id}`, {
+        userId: uid, nomeMembro: c.nomeMembro, cpf: '', papel, refKind, refId: c.projetoId ? 'p' + c.projetoId : null,
+        atividade: c.tipo === 'Estagio' ? 'Estágios supervisionados da LACMES' : (c.cargoTexto || 'Atuação na LACMES'), cargoTexto: c.cargoTexto || '',
+        cargaHoraria: c.cargaHoraria || 0, periodoInicio: c.periodoInicio || null, periodoFim: c.periodoFim || null,
+        signatarios: [], status: emitido ? 'emitido' : 'solicitado', pdfUrl: emitido ? c.urlFinal : null, codigo: 'LAC-' + c.id.slice(-8).toUpperCase(),
+        solicitadoPor: S.uid, criadoPor: S.uid, criadoEm: agora, emitidoEm: emitido ? agora : null,
+        historico: [{ em: agora, por: S.uid, acao: 'Importado do sistema antigo' }]
+      }));
+    });
     if (antigo.configCertificado) ops.push(op.set('config/geral', { orientadoraNome: antigo.configCertificado.orientadoraNome || '', presidenteUid: mapa[(antigo.usuarios[antigo.configCertificado.presidenteId] || {}).id] || S.uid, areasEstagio: antigo.areasEstagio || [] }, { merge: true }));
     await Data.batch(ops);
     log(`✓ ${ops.length} registros (oportunidades, aulas, fórum, financeiro, atas, agendas, certificados)`);

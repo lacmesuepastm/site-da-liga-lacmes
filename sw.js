@@ -1,4 +1,4 @@
-﻿const VERSAO = 'lacmes-v1.2.1';
+﻿const VERSAO = 'lacmes-v1.3.1';
 const BASE = self.registration.scope;
 const ESSENCIAIS = [
   '', 'index.html', 'verificar.html', 'manifest.webmanifest', 'css/app.css',
@@ -55,3 +55,4 @@ self.addEventListener('notificationclick', (e) => {
     return self.clients.openWindow(destino);
   }));
 });
+

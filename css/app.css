@@ -711,3 +711,26 @@ a.linha-item:hover { background: var(--hover); }
 .anexo-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 4px; border: 1px solid var(--line); border-radius: var(--radius-s); font-size: 12.5px; max-width: 100%; }
 .anexo-chip > span:not(.arq-ico) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
 .anexo-chip .arq-ico { width: 28px; height: 28px; border-radius: 7px; }
+
+.cw-row { display: grid; grid-template-columns: 2.2fr 1.3fr 1.5fr .7fr 32px; gap: 6px; margin-bottom: 6px; align-items: center; }
+.cw-row.cw-cab { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); margin-bottom: 4px; }
+.cw-row input, .cw-row select, .cw-sign input { height: 36px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--radius-s); background: var(--surface); width: 100%; min-width: 0; outline: none; }
+.cw-row input:focus, .cw-row select:focus, .cw-sign input:focus { border-color: var(--accent); }
+.cw-row input[readonly] { background: var(--hover); }
+.cw-row input.invalido { border-color: var(--danger); color: var(--danger); }
+.cw-sign { display: grid; grid-template-columns: 1fr 1.2fr 32px; gap: 6px; margin-bottom: 6px; align-items: center; }
+.cw-det { border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 12px; margin-bottom: 10px; }
+.cw-det summary { cursor: pointer; font-weight: 500; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.cw-det[open] summary { margin-bottom: 10px; }
+.card-lote { display: block; color: inherit; }
+.signs-resumo { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.sign-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-s); }
+.sign-chip > span { display: flex; flex-direction: column; line-height: 1.25; }
+.sign-chip small { color: var(--ink-3); }
+@media (max-width: 760px) {
+  .cw-row { grid-template-columns: 1fr 1fr; }
+  .cw-row.cw-cab { display: none; }
+  .cw-row .cw-nome { grid-column: 1 / -1; }
+  .cw-sign { grid-template-columns: 1fr 32px; }
+  .cw-sign .cs-titulo { grid-column: 1 / -1; grid-row: 2; }
+}

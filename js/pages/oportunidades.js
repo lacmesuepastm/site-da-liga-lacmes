@@ -198,7 +198,7 @@ acao('certificarEstagios', () => {
 acao('gerarCertEstagio', async () => {
   const uids = [...document.querySelectorAll('input[name="ce-uids"]:checked')].map(i => i.value); if (!uids.length) return;
   await criarCertificados(uids.map(userId => ({ userId, tipo: 'Estagio', cargaHoraria: horasEstagio(userId) })));
-  fecharModal(); toast(`${uids.length} certificado(s) enviados para assinatura.`, 'ok');
+  fecharModal(); toast(`${uids.length} certificado(s) solicitado(s) à Presidência.`, 'ok');
 });
 
 export const oportunidades = { titulo: 'Oportunidades', render: renderPublico };

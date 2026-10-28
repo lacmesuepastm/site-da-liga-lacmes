@@ -398,14 +398,14 @@ acao('certificarProjeto', ({ pid }) => {
   const p = S.projetos[pid]; const ja = new Set(p.certificadosEnviados || []);
   const pend = (p.membros || []).map(m => m.uid).filter(u => !ja.has(u) && S.usuarios[u]);
   if (!pend.length) { toast('Todos os membros já foram certificados.', 'info'); return; }
-  abrirModal({ titulo: `Certificar — ${p.titulo}`, largura: 520, corpo: `<p class="mudo">Carga horária: <b>${p.cargaHoraria || 0}h</b>. Os certificados entram na fila de assinatura da Presidência e depois do(a) orientador(a).</p>
+  abrirModal({ titulo: `Certificar — ${p.titulo}`, largura: 520, corpo: `<p class="mudo">Carga horária: <b>${p.cargaHoraria || 0}h</b>. Os pedidos vão para a Presidência, que monta o lote, escolhe quem assina e envia aos membros.</p>
     ${seletorPessoas('cp-uids', pend, pend, { todosOpcao: true })}<div class="acoes-form">${btn('Cancelar', 'fecharModal')}${btn('Gerar certificados', 'gerarCertProjeto', { classe: 'btn-pri', icone: 'certificado', dados: { pid } })}</div>` });
 });
 acao('gerarCertProjeto', async ({ pid }) => {
   const p = S.projetos[pid]; const uids = [...document.querySelectorAll('input[name="cp-uids"]:checked')].map(i => i.value); if (!uids.length) return;
   await criarCertificados(uids.map(userId => ({ userId, tipo: 'Projeto', cargaHoraria: p.cargaHoraria || 0, projetoId: pid, cargoTexto: p.titulo })));
   await upd(pid, { certificadosEnviados: [...new Set([...(p.certificadosEnviados || []), ...uids])] });
-  fecharModal(); toast(`${uids.length} certificado(s) enviados para assinatura.`, 'ok');
+  fecharModal(); toast(`${uids.length} certificado(s) solicitado(s) à Presidência.`, 'ok');
 });
 acao('apagarProjeto', async ({ pid }) => {
   if (!(await confirmar('Excluir permanentemente este projeto para todos?', { ok: 'Excluir', perigo: true }))) return;

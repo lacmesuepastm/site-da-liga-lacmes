@@ -115,7 +115,7 @@ service cloud.firestore {
     }
 
     match /anexos/{id} {
-      allow get: if ativo() && (!resource.data.get('restrito', false) || admin() || temCargo('Vice-presidente e Secretário'));
+      allow get: if ativo() && (!resource.data.get('restrito', false) || admin() || temCargo('Vice-presidente e Secretário') || resource.data.get('dono', null) == request.auth.uid);
       allow list: if false;
       allow create: if ativo() && request.resource.data.por == request.auth.uid;
       allow delete: if admin() || (ativo() && resource.data.por == request.auth.uid);
@@ -139,19 +139,20 @@ service cloud.firestore {
     }
 
     match /certificados/{id} {
-      allow read: if admin() || (ativo() && (resource.data.userId == request.auth.uid || resource.data.get('signerUid', null) == request.auth.uid));
+      allow read: if admin() || (ativo() && resource.data.userId == request.auth.uid);
       allow create: if diretor();
-      allow update: if admin() || (orientador() && resource.data.get('signerUid', null) == request.auth.uid);
-      allow delete: if admin();
+      allow update, delete: if admin();
     }
-    match /certificados_pdf/{id} {
-      allow read: if admin() || orientador()
-        || (ativo() && get(/databases/$(database)/documents/certificados/$(id)).data.userId == request.auth.uid);
-      allow write: if admin() || orientador();
+    match /lotesCert/{id} {
+      allow read, write: if admin();
+    }
+    match /dadosPessoais/{uid} {
+      allow read: if admin() || (ativo() && request.auth.uid == uid);
+      allow write: if admin() || (ativo() && request.auth.uid == uid);
     }
     match /verificacoes/{codigo} {
       allow read: if true;
-      allow write: if admin() || orientador();
+      allow write: if admin();
     }
   }
 }

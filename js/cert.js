@@ -1,169 +1,125 @@
 import { Data, F, op } from './data.js';
-import { S, nomeDe } from './store.js';
-import { P } from './dominio.js';
-import { WORKER_URL, SITE_URL } from './config.js';
-import { enviarArquivo, blobParaDataURL, isoParaBR, toast, novoId } from './util.js';
+import { S } from './store.js';
+import { SITE_URL } from './config.js';
+import { blobParaDataURL, isoParaBR, dataDeISO, MESES, toast, novoId } from './util.js';
 import { notificar } from './notificar.js';
+import { anexarBlob, abrirArquivo } from './arquivos.js';
 
 export const STATUS = {
-  pendente_presidencia: { nome: 'Aguardando Presidência', cor: '#b7791f', passo: 1 },
-  pendente_orientador: { nome: 'Aguardando Orientador(a)', cor: '#2b6cb0', passo: 2 },
-  emitido: { nome: 'Emitido', cor: '#1a7f5a', passo: 3 },
-  devolvido: { nome: 'Devolvido para correção', cor: '#b23b3b', passo: 0 },
-  cancelado: { nome: 'Cancelado', cor: '#888', passo: 0 }
+  solicitado: { nome: 'Solicitado', cor: '#b7791f' },
+  aguardando_assinatura: { nome: 'Em assinatura', cor: '#2b6cb0' },
+  emitido: { nome: 'Emitido', cor: '#1a7f5a' },
+  cancelado: { nome: 'Cancelado', cor: '#888888' }
+};
+
+export const PAPEIS = ['Participante', 'Palestrante', 'Organizador(a)', 'Monitor(a)', 'Coordenador(a)', 'Membro da LACMES', 'Diretor(a) da LACMES'];
+
+export const REFS = {
+  aula: { rot: 'Aula', de: 'da aula', em: 'na aula', por: 'promovida pela' },
+  evento: { rot: 'Evento ou reunião', de: 'do evento', em: 'no evento', por: 'promovido pela' },
+  acao: { rot: 'Ação, extensão ou pesquisa', de: 'da ação', em: 'na ação', por: 'promovida pela' },
+  projeto: { rot: 'Projeto', de: 'do projeto', em: 'no projeto', por: 'desenvolvido no âmbito da' },
+  estagio: { rot: 'Estágio', de: 'do estágio', em: 'no estágio', por: 'promovido pela' },
+  livre: { rot: 'Atividade livre', de: 'da atividade', em: 'na atividade', por: 'promovida pela' },
+  membro: { rot: 'Membro ou diretoria', de: '', em: '', por: '' }
 };
 
 const ALFA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const codigo = () => 'LAC-' + [4, 4].map(n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => ALFA[b % ALFA.length]).join('')).join('-');
+export const gerarCodigo = () => 'LAC-' + [4, 4].map(n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => ALFA[b % ALFA.length]).join('')).join('-');
 
-export function tituloCert(tipo, cargoTexto) {
-  return ({
-    Projeto: `Participação em Projeto — ${cargoTexto}`, Aula: `Participação em Aula — ${cargoTexto}`,
-    Estagio: 'Participação em Estágio(s)', Diretor: `Atuação na Diretoria — ${cargoTexto}`, Caso: `Participação em Casos Clínicos`
-  })[tipo] || 'Membro da LACMES';
+export const soDigitos = (s) => String(s || '').replace(/\D/g, '');
+
+export function cpfValido(s) {
+  const d = soDigitos(s);
+  if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+  const dv = (n) => { let soma = 0; for (let i = 0; i < n; i++) soma += Number(d[i]) * (n + 1 - i); const r = (soma * 10) % 11; return r === 10 ? 0 : r; };
+  return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);
 }
 
-export function assinanteDe({ tipo, projetoId }) {
-  const proj = projetoId && S.projetos[projetoId];
-  if (tipo === 'Projeto' && proj && proj.orientadorUid && S.usuarios[proj.orientadorUid]) {
-    return { signerUid: proj.orientadorUid, signerNome: nomeDe(proj.orientadorUid), signerCargo: 'Orientador(a) do Projeto' };
+export function formatarCPF(s) {
+  const d = soDigitos(s).slice(0, 11);
+  if (d.length > 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  if (d.length > 6) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  if (d.length > 3) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  return d;
+}
+
+export const mascararCPF = (s) => { const d = soDigitos(s); return d.length === 11 ? `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**` : ''; };
+
+export async function cpfDe(uid) {
+  try { const d = await Data.getDoc(`dadosPessoais/${uid}`); return (d && d.cpf) || ''; } catch { return ''; }
+}
+
+export const rotuloCert = (c) => `${c.papel || 'Participante'} — ${c.atividade || ''}`;
+
+const fmtNum = (n) => String(Number(n) || 0).replace('.', ',');
+const papelMin = (p) => String(p || '').toLowerCase();
+
+function dataTexto(c) {
+  if (c.data) { const d = dataDeISO(c.data); return `${d.getDate()} de ${MESES[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; }
+  const i = isoParaBR(c.periodoInicio), f = isoParaBR(c.periodoFim);
+  if (i && f) return `${i} a ${f}`;
+  if (i) return `a partir de ${i}`;
+  if (f) return `até ${f}`;
+  return '';
+}
+
+function trechos(c) {
+  const ref = REFS[c.refKind] || REFS.livre;
+  const L = ['Liga Acadêmica de Clínica Médica de Santarém (LACMES)', false];
+  const CH = [`${fmtNum(c.cargaHoraria)} ${Number(c.cargaHoraria) === 1 ? 'hora' : 'horas'}`, true];
+  const fim = [[', com carga horária de ', 0], CH, ['.', 0]];
+  if (c.refKind === 'membro') {
+    const funcao = c.papel === 'Diretor(a) da LACMES' ? (c.cargoTexto || 'diretor(a)') : 'membro';
+    const per = dataTexto(c);
+    return [['atuou como ', 0], [funcao, true], [' da ', 0], L, [per ? `, no período de ${per}` : '', 0], ...fim];
   }
-  const uid = S.config.orientadoraUid;
-  return { signerUid: uid || null, signerNome: uid ? nomeDe(uid) : (S.config.orientadoraNome || 'Orientadora'), signerCargo: 'Orientadora — LACMES' };
-}
-
-export async function criarCertificados(lista) {
-  const agora = Date.now();
-  const ops = lista.map(c => {
-    const u = S.usuarios[c.userId];
-    const doc = {
-      userId: c.userId, nomeMembro: u ? u.nome : c.nomeMembro, tipo: c.tipo, cargaHoraria: Number(c.cargaHoraria) || 0,
-      cargoTexto: c.cargoTexto || '', projetoId: c.projetoId || null, aulaId: c.aulaId || null,
-      periodoInicio: c.periodoInicio || null, periodoFim: c.periodoFim || null,
-      titulo: tituloCert(c.tipo, c.cargoTexto), ...assinanteDe(c),
-      status: 'pendente_presidencia', codigo: codigo(), criadoPor: S.uid, criadoEm: agora,
-      historico: [{ em: agora, por: S.uid, acao: 'Criado' }]
-    };
-    return op.set(`certificados/${novoId('ce')}`, doc);
-  });
-  await Data.batch(ops);
-  const admins = Object.values(S.usuarios).filter(u => u.tipo === 'admin').map(u => u.id);
-  notificar({ tipo: 'certificado', pref: 'certificados', uids: admins, titulo: `${lista.length} certificado(s) aguardando assinatura da Presidência`, url: '#/certificados/assinar' });
-  return ops.length;
-}
-
-const registrar = (acao) => F.arrayUnion({ em: Date.now(), por: S.uid, acao });
-
-export async function minhaAssinatura() { const d = await Data.getDoc(`assinaturas/${S.uid}`); return d && d.img; }
-
-export async function assinarPresidencia(ids) {
-  const img = await minhaAssinatura();
-  if (!img) { toast('Cadastre sua assinatura em Meu perfil → Assinatura antes de assinar.', 'erro', 6000); return false; }
-  const certs = ids.map(id => S.certificados.find(c => c.id === id)).filter(c => c && c.status === 'pendente_presidencia');
-  await Data.batch(certs.map(c => op.update(`certificados/${c.id}`, {
-    status: 'pendente_orientador', presidenteUid: S.uid, presidenteNome: S.eu.nome, assinadoPresEm: Date.now(), historico: registrar('Assinado pela Presidência')
-  })));
-  const porSigner = {};
-  certs.forEach(c => { if (c.signerUid) porSigner[c.signerUid] = (porSigner[c.signerUid] || 0) + 1; });
-  Object.entries(porSigner).forEach(([uid, n]) => notificar({ tipo: 'certificado', pref: 'certificados', uids: [uid], titulo: `${n} certificado(s) aguardando sua assinatura`, corpo: 'Já assinados pela Presidência.', url: '#/certificados/assinar' }));
-  return certs.length;
-}
-
-async function guardarPDF(cert, blob) {
-  if (WORKER_URL) {
-    const file = new File([blob], `certificado-${cert.codigo}.pdf`, { type: 'application/pdf' });
-    return { pdfUrl: await enviarArquivo(file, 'certificados') };
-  }
-  await Data.set(`certificados_pdf/${cert.id}`, { data: await blobParaDataURL(blob), userId: cert.userId, em: Date.now() });
-  return { pdfNoBanco: true };
-}
-async function publicarVerificacao(c, extra = {}) {
-  await Data.set(`verificacoes/${c.codigo}`, { nome: c.nomeMembro, titulo: c.titulo, cargaHoraria: c.cargaHoraria, tipo: c.tipo, emitidoEm: Date.now(), presidente: c.presidenteNome || '', orientador: c.signerNome || '', status: 'valido', ...extra });
-}
-
-export async function assinarOrientador(ids, aoProgresso) {
-  const img = await minhaAssinatura();
-  if (!img) { toast('Cadastre sua assinatura em Meu perfil → Assinatura antes de assinar.', 'erro', 6000); return false; }
-  const certs = ids.map(id => S.certificados.find(c => c.id === id)).filter(c => c && c.status === 'pendente_orientador' && (c.signerUid === S.uid || P.admin(S.eu)));
-  const cachePres = {};
-  let n = 0;
-  for (const c of certs) {
-    if (!(c.presidenteUid in cachePres)) cachePres[c.presidenteUid] = c.presidenteUid ? ((await Data.getDoc(`assinaturas/${c.presidenteUid}`)) || {}).img : null;
-    const final = { ...c, signerNome: S.eu.nome, emitidoEm: Date.now() };
-    const blob = await gerarPDF(final, { assinaturaPres: cachePres[c.presidenteUid], assinaturaOrient: img });
-    const local = await guardarPDF(c, blob);
-    await Data.update(`certificados/${c.id}`, { status: 'emitido', signerUid: S.uid, signerNome: S.eu.nome, assinadoOrientEm: Date.now(), emitidoEm: final.emitidoEm, ...local, historico: registrar('Assinado pelo(a) orientador(a) — emitido') });
-    await publicarVerificacao(final);
-    notificar({ tipo: 'certificado', pref: 'certificados', uids: [c.userId], titulo: 'Seu certificado foi emitido!', corpo: c.titulo, url: '#/certificados' });
-    aoProgresso && aoProgresso(++n, certs.length);
-  }
-  return certs.length;
-}
-
-export async function devolver(id, motivo) {
-  const c = S.certificados.find(x => x.id === id); if (!c) return;
-  await Data.update(`certificados/${id}`, { status: 'devolvido', motivoDevolucao: motivo, devolvidoPor: S.uid, historico: registrar('Devolvido: ' + motivo) });
-  notificar({ tipo: 'certificado', pref: 'certificados', uids: [c.criadoPor], titulo: 'Certificado devolvido para correção', corpo: `${c.nomeMembro}: ${motivo}`, url: '#/certificados/assinar' });
-}
-export const reenviar = (id, mudancas = {}) => Data.update(`certificados/${id}`, { ...mudancas, status: 'pendente_presidencia', motivoDevolucao: null, historico: registrar('Corrigido e reenviado') });
-export const cancelar = (id) => Data.update(`certificados/${id}`, { status: 'cancelado', historico: registrar('Cancelado') });
-
-export async function enviarManual(ids, etapa, file) {
-  const url = await enviarArquivo(file, 'certificados');
-  for (const id of ids) {
-    const c = S.certificados.find(x => x.id === id); if (!c) continue;
-    if (etapa === 'presidencia') await Data.update(`certificados/${id}`, { status: 'pendente_orientador', presidenteUid: S.uid, presidenteNome: S.eu.nome, urlPresManual: url, assinadoPresEm: Date.now(), historico: registrar('PDF assinado (manual) — Presidência') });
-    else {
-      await Data.update(`certificados/${id}`, { status: 'emitido', pdfUrl: url, emitidoEm: Date.now(), assinadoOrientEm: Date.now(), historico: registrar('PDF final assinado (manual) — emitido') });
-      await publicarVerificacao(c, { manual: true });
-      notificar({ tipo: 'certificado', pref: 'certificados', uids: [c.userId], titulo: 'Seu certificado foi emitido!', corpo: c.titulo, url: '#/certificados' });
-    }
-  }
-}
-
-export async function baixar(c) {
-  if (c.pdfUrl) { window.open(c.pdfUrl, '_blank', 'noopener'); return; }
-  if (c.pdfNoBanco) {
-    const d = await Data.getDoc(`certificados_pdf/${c.id}`);
-    if (d && d.data) { const blob = await (await fetch(d.data)).blob(); abrirBlob(blob, `certificado-${c.codigo}.pdf`); return; }
-  }
-  toast('PDF indisponível.', 'erro');
-}
-export async function previa(c) { abrirBlob(await gerarPDF(c, { previa: c.status !== 'emitido' }), `previa-${c.codigo}.pdf`); }
-function abrirBlob(blob, nome) {
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, '_blank');
-  if (!w) { const a = document.createElement('a'); a.href = url; a.download = nome; a.click(); }
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  const inicio = (!c.papel || c.papel === 'Participante')
+    ? [[`participou ${ref.de} `, 0]]
+    : [['atuou como ', 0], [papelMin(c.papel), true], [` ${ref.em} `, 0]];
+  return [...inicio, [c.atividade || '', true], [`, ${ref.por} `, 0], L, ...fim];
 }
 
 let logoCache = null;
-async function logo() {
+async function logoDataURL() {
   if (logoCache) return logoCache;
   const r = await fetch('assets/logo-lacmes.png');
   logoCache = await blobParaDataURL(await r.blob());
   return logoCache;
 }
-function periodo(c) {
-  const i = isoParaBR(c.periodoInicio), f = isoParaBR(c.periodoFim);
-  return i && f ? `${i} a ${f}` : (i ? `a partir de ${i}` : (f ? `até ${f}` : ''));
+
+async function esperarJsPDF() {
+  for (let i = 0; i < 40 && !(window.jspdf && window.jspdf.jsPDF); i++) await new Promise(r => setTimeout(r, 100));
+  if (!(window.jspdf && window.jspdf.jsPDF)) throw new Error('A biblioteca de PDF ainda não carregou. Recarregue a página e tente de novo.');
+  return window.jspdf.jsPDF;
 }
-function trechos(c) {
-  const N = [c.nomeMembro, true], L = ['Liga Acadêmica de Clínica Médica de Santarém (LACMES)', false];
-  const CH = [`${String(c.cargaHoraria).replace('.', ',')} horas`, true];
-  const per = periodo(c);
-  switch (c.tipo) {
-    case 'Projeto': return [['Certificamos que ', 0], N, [' participou do projeto ', 0], [c.cargoTexto, true], [', desenvolvido no âmbito da ', 0], L, [', com carga horária de ', 0], CH, ['.', 0]];
-    case 'Aula': return [['Certificamos que ', 0], N, [' participou da aula ', 0], [c.cargoTexto, true], [', promovida pela ', 0], L, [', com carga horária de ', 0], CH, ['.', 0]];
-    case 'Estagio': return [['Certificamos que ', 0], N, [' participou de atividades de estágio promovidas pela ', 0], L, [', com carga horária total de ', 0], CH, ['.', 0]];
-    case 'Diretor': return [['Certificamos que ', 0], N, [' atuou como ', 0], [c.cargoTexto, true], [' da ', 0], L, per ? [`, no período de ${per}`, 0] : ['', 0], [', com carga horária total de ', 0], CH, ['.', 0]];
-    default: return [['Certificamos que ', 0], N, [' atuou como membro da ', 0], L, per ? [`, no período de ${per}`, 0] : ['', 0], [', com carga horária total de ', 0], CH, ['.', 0]];
-  }
+
+const AZUL = [18, 55, 92], AMARELO = [217, 162, 27], CINZA = [105, 112, 122], TEXTO = [45, 52, 62];
+
+function losango(doc, x, y, r) {
+  doc.triangle(x - r, y, x, y - r, x + r, y, 'F');
+  doc.triangle(x - r, y, x, y + r, x + r, y, 'F');
 }
+
+function iconeCalendario(doc, x, y, s) {
+  doc.roundedRect(x, y + 0.8, s, s - 0.8, 0.7, 0.7, 'S');
+  doc.line(x, y + 2.7, x + s, y + 2.7);
+  doc.line(x + s * 0.3, y, x + s * 0.3, y + 1.6); doc.line(x + s * 0.7, y, x + s * 0.7, y + 1.6);
+}
+function iconeRelogio(doc, x, y, s) {
+  doc.circle(x + s / 2, y + s / 2, s / 2, 'S');
+  doc.line(x + s / 2, y + s / 2, x + s / 2, y + s * 0.2); doc.line(x + s / 2, y + s / 2, x + s * 0.74, y + s * 0.62);
+}
+function iconeLocal(doc, x, y, s) {
+  doc.circle(x + s / 2, y + s * 0.36, s * 0.3, 'S');
+  doc.line(x + s * 0.24, y + s * 0.55, x + s / 2, y + s); doc.line(x + s * 0.76, y + s * 0.55, x + s / 2, y + s);
+  doc.circle(x + s / 2, y + s * 0.36, s * 0.1, 'S');
+}
+
 function textoRico(doc, partes, xCentro, y, larguraMax, tam, entre) {
   const palavras = [];
   partes.forEach(([t, b]) => String(t).split(/(\s+)/).forEach(w => { if (w) palavras.push({ w, b: !!b }); }));
-  const medir = (p) => { doc.setFont('helvetica', p.b ? 'bold' : 'normal'); doc.setFontSize(tam); return doc.getTextWidth(p.w); };
+  const medir = (p) => { doc.setFont('times', p.b ? 'bold' : 'normal'); doc.setFontSize(tam); return doc.getTextWidth(p.w); };
   const linhas = []; let atual = [], larg = 0;
   palavras.forEach(p => {
     const lw = medir(p);
@@ -176,54 +132,242 @@ function textoRico(doc, partes, xCentro, y, larguraMax, tam, entre) {
     while (l.length && /^\s+$/.test(l[l.length - 1].w)) l.pop();
     const total = l.reduce((s, p) => s + p.lw, 0);
     let x = xCentro - total / 2;
-    l.forEach(p => { doc.setFont('helvetica', p.b ? 'bold' : 'normal'); doc.setTextColor(p.b ? 18 : 60, p.b ? 55 : 60, p.b ? 92 : 60); doc.text(p.w, x, y + i * entre); x += p.lw; });
+    l.forEach(p => {
+      doc.setFont('times', p.b ? 'bold' : 'normal');
+      doc.setTextColor(...(p.b ? AZUL : TEXTO));
+      doc.text(p.w, x, y + i * entre);
+      x += p.lw;
+    });
   });
   return linhas.length;
 }
 
-export async function gerarPDF(c, { assinaturaPres, assinaturaOrient, previa = false } = {}) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const W = 297, H = 210, NAVY = [18, 55, 92], GOLD = [181, 146, 73];
-  doc.setFillColor(252, 251, 249); doc.rect(0, 0, W, H, 'F');
-  doc.setDrawColor(...NAVY); doc.setLineWidth(0.8); doc.rect(9, 9, W - 18, H - 18);
-  doc.setDrawColor(...GOLD); doc.setLineWidth(0.3); doc.rect(12, 12, W - 24, H - 24);
-  doc.setFillColor(...GOLD); doc.rect(W / 2 - 40, 9, 80, 1.6, 'F');
-  try { doc.addImage(await logo(), 'PNG', W / 2 - 13, 17, 26, 26); } catch { }
-  doc.setFont('times', 'bold'); doc.setFontSize(40); doc.setTextColor(...NAVY);
-  doc.text('CERTIFICADO', W / 2, 60, { align: 'center', charSpace: 3 });
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...GOLD);
-  doc.text('LIGA ACADÊMICA DE CLÍNICA MÉDICA DE SANTARÉM', W / 2, 69, { align: 'center', charSpace: 1.2 });
-  textoRico(doc, trechos(c), W / 2, 90, 215, 15, 9);
+function desenharPagina(doc, c, { logo, assinaturas }) {
+  const W = 297, H = 210;
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, H, 'F');
 
-  const assinatura = (x, img, nome, cargo) => {
-    if (img) { try { doc.addImage(img, img.includes('image/png') ? 'PNG' : 'JPEG', x - 30, 150, 60, 20, undefined, 'FAST'); } catch { } }
-    doc.setDrawColor(...NAVY); doc.setLineWidth(0.3); doc.line(x - 38, 171, x + 38, 171);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(50, 50, 50); doc.text(nome || '', x, 177, { align: 'center' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110, 110, 110); doc.text(cargo || '', x, 182, { align: 'center' });
-  };
-  const presNome = c.presidenteNome || nomeDe(S.config.presidenteUid) || 'Presidência LACMES';
-  assinatura(85, assinaturaPres, presNome, 'Presidência — LACMES');
-  assinatura(212, assinaturaOrient, c.signerNome, c.signerCargo);
+  try {
+    doc.setGState(new doc.GState({ opacity: 0.045 }));
+    doc.addImage(logo, 'PNG', W / 2 - 60, H / 2 - 62, 120, 120);
+    doc.setGState(new doc.GState({ opacity: 1 }));
+  } catch { }
 
-  const emitido = c.emitidoEm ? new Date(c.emitidoEm).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(130, 130, 130);
-  doc.text(`Santarém-PA, ${emitido}  ·  Código de verificação: ${c.codigo}  ·  Verifique em ${SITE_URL.replace(/^https?:\/\//, '')}/verificar.html?c=${c.codigo}`, W / 2, 195, { align: 'center' });
+  doc.setDrawColor(...AZUL); doc.setLineWidth(0.7); doc.rect(8, 8, W - 16, H - 16);
+  doc.setDrawColor(...AMARELO); doc.setLineWidth(0.3); doc.rect(11, 11, W - 22, H - 22);
+  doc.setFillColor(...AMARELO);
+  [[11, 11], [W - 11, 11], [11, H - 11], [W - 11, H - 11]].forEach(([x, y]) => doc.rect(x - 1.4, y - 1.4, 2.8, 2.8, 'F'));
 
-  if (previa) {
-    doc.saveGraphicsState && doc.saveGraphicsState();
-    try { doc.setGState(new doc.GState({ opacity: 0.12 })); } catch { }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(60); doc.setTextColor(178, 59, 59);
-    doc.text('PRÉVIA — NÃO VÁLIDO', W / 2, H / 2 + 10, { align: 'center', angle: 18 });
-    doc.restoreGraphicsState && doc.restoreGraphicsState();
+  doc.addImage(logo, 'PNG', W / 2 - 13, 15, 26, 26);
+  doc.setDrawColor(...AMARELO); doc.setLineWidth(0.35);
+  doc.line(52, 28, W / 2 - 20, 28); doc.line(W / 2 + 20, 28, W - 52, 28);
+  doc.setFillColor(...AMARELO); losango(doc, W / 2 - 24, 28, 1.3); losango(doc, W / 2 + 24, 28, 1.3);
+
+  doc.setFont('times', 'bold'); doc.setFontSize(34); doc.setTextColor(...AZUL);
+  textoEspacado(doc, 'CERTIFICADO', W / 2, 58, 4);
+  doc.setFont('times', 'normal'); doc.setFontSize(10.5); doc.setTextColor(...AZUL);
+  textoEspacado(doc, 'LIGA ACADÊMICA DE CLÍNICA MÉDICA DE SANTARÉM', W / 2, 65, 1.4);
+
+  doc.setFont('times', 'italic'); doc.setFontSize(14); doc.setTextColor(...CINZA);
+  doc.text('Certificamos que', W / 2, 80, { align: 'center' });
+
+  let tamNome = 25;
+  doc.setFont('times', 'bold');
+  while (tamNome > 14) { doc.setFontSize(tamNome); if (doc.getTextWidth(c.nomeMembro || '') <= 215) break; tamNome -= 1; }
+  doc.setFontSize(tamNome); doc.setTextColor(...AZUL);
+  doc.text(c.nomeMembro || '', W / 2, 92, { align: 'center' });
+  const larguraNome = Math.min(doc.getTextWidth(c.nomeMembro || '') + 16, 240);
+  doc.setDrawColor(...AMARELO); doc.setLineWidth(0.5); doc.line(W / 2 - larguraNome / 2, 95.5, W / 2 + larguraNome / 2, 95.5);
+
+  let y = 104;
+  if (soDigitos(c.cpf).length === 11) {
+    doc.setFont('times', 'normal'); doc.setFontSize(11.5); doc.setTextColor(...CINZA);
+    doc.text(`CPF ${formatarCPF(c.cpf)}`, W / 2, y, { align: 'center' });
+    y += 2;
   }
-  doc.setProperties({ title: `Certificado — ${c.nomeMembro}`, subject: c.titulo, author: 'LACMES' });
+  textoRico(doc, trechos(c), W / 2, y + 10, 205, 14.5, 7.6);
+
+  const itens = [];
+  const dt = dataTexto(c);
+  if (dt) itens.push({ icone: iconeCalendario, texto: dt });
+  if (c.refKind !== 'membro' && c.local) itens.push({ icone: iconeLocal, texto: c.local });
+  itens.push({ icone: iconeRelogio, texto: `Carga horária: ${fmtNum(c.cargaHoraria)} h` });
+  doc.setFont('times', 'normal'); doc.setFontSize(10.5);
+  const tam = 4.6, folga = 2.2, entre = 14;
+  const larguras = itens.map(i => tam + folga + doc.getTextWidth(i.texto));
+  let x = W / 2 - (larguras.reduce((a, b) => a + b, 0) + entre * (itens.length - 1)) / 2;
+  const yi = 146;
+  doc.setDrawColor(...AZUL); doc.setLineWidth(0.35); doc.setTextColor(...TEXTO);
+  itens.forEach((item, i) => { item.icone(doc, x, yi - 3.6, tam); doc.text(item.texto, x + tam + folga, yi); x += larguras[i] + entre; });
+
+  const sig = c.signatarios || [];
+  const n = sig.length;
+  if (n) {
+    const centros = ({ 1: [W / 2], 2: [86, 211], 3: [58, W / 2, 239], 4: [46, 116, 181, 251] })[Math.min(n, 4)];
+    const lw = n >= 4 ? 56 : 70;
+    sig.slice(0, 4).forEach((s, i) => {
+      const cx = centros[i];
+      if (assinaturas && assinaturas[i]) { try { doc.addImage(assinaturas[i], 'PNG', cx - 24, 153, 48, 16, undefined, 'FAST'); } catch { } }
+      doc.setDrawColor(...AZUL); doc.setLineWidth(0.3); doc.line(cx - lw / 2, 171, cx + lw / 2, 171);
+      doc.setFont('times', 'bold'); doc.setFontSize(11); doc.setTextColor(...TEXTO);
+      doc.text(doc.splitTextToSize(s.nome || '', lw + 8).slice(0, 2), cx, 176, { align: 'center' });
+      doc.setFont('times', 'italic'); doc.setFontSize(9.5); doc.setTextColor(...CINZA);
+      doc.text(doc.splitTextToSize(s.titulo || '', lw + 8).slice(0, 2), cx, 181, { align: 'center' });
+    });
+  }
+
+  const emitido = new Date(c.emitidoEm || Date.now());
+  doc.setFont('times', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...CINZA);
+  doc.text(`Santarém-PA, ${emitido.getDate()} de ${MESES[emitido.getMonth()].toLowerCase()} de ${emitido.getFullYear()}`, W / 2, 191, { align: 'center' });
+  desenharQR(doc, `${SITE_URL}/verificar.html?c=${c.codigo}`, 17, 183, 14);
+  doc.setFont('times', 'normal'); doc.setFontSize(8); doc.setTextColor(...CINZA);
+  doc.text('Verifique a autenticidade', 34, 187.5);
+  doc.setFont('times', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...AZUL);
+  doc.text(c.codigo || '', 34, 192.5);
+  doc.setFont('times', 'normal'); doc.setFontSize(7); doc.setTextColor(...CINZA);
+  doc.text('Aponte a câmera para o QR Code', 34, 196);
+}
+
+function desenharQR(doc, texto, x, y, tamanho) {
+  if (!window.qrcode) return;
+  const qr = window.qrcode(0, 'M'); qr.addData(texto); qr.make();
+  const n = qr.getModuleCount(), m = tamanho / n;
+  doc.setFillColor(...AZUL);
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (qr.isDark(r, k)) doc.rect(x + k * m, y + r * m, m + 0.02, m + 0.02, 'F');
+}
+
+function textoEspacado(doc, texto, xCentro, y, espaco) {
+  const larg = doc.getTextWidth(texto) + espaco * (texto.length - 1);
+  doc.text(texto, xCentro - larg / 2, y, { charSpace: espaco });
+}
+
+export async function gerarPDFLote(certs, { assinaturas = {} } = {}) {
+  const jsPDF = await esperarJsPDF();
+  const logo = await logoDataURL();
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  certs.forEach((c, i) => { if (i) doc.addPage(); desenharPagina(doc, c, { logo, assinaturas }); });
+  doc.setProperties({ title: certs.length === 1 ? `Certificado — ${certs[0].nomeMembro}` : `Certificados — ${certs[0] ? certs[0].atividade : ''}`, author: 'LACMES' });
   return doc.output('blob');
+}
+
+function abrirBlob(blob) {
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank');
+  if (!w) { const a = document.createElement('a'); a.href = url; a.download = 'certificado.pdf'; a.click(); }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+export async function previa(c) { abrirBlob(await gerarPDFLote([c])); }
+
+export async function baixar(c) {
+  if (c.pdfUrl) { await abrirArquivo(c.pdfUrl, `certificado-${c.codigo}.pdf`); return; }
+  await previa(c);
+}
+
+export async function minhaAssinatura() {
+  const d = await Data.getDoc(`assinaturas/${S.uid}`);
+  return (d && d.img) || null;
+}
+
+const registro = (acao) => ({ em: Date.now(), por: S.uid, acao });
+
+export async function criarCertificados(lista) {
+  const agora = Date.now();
+  const ops = lista.map(c => {
+    const u = S.usuarios[c.userId];
+    const refKind = ({ Projeto: 'projeto', Aula: 'aula', Estagio: 'estagio', Diretor: 'membro', Membro: 'membro' })[c.tipo] || 'livre';
+    const papel = c.tipo === 'Diretor' ? 'Diretor(a) da LACMES' : (c.tipo === 'Membro' ? 'Membro da LACMES' : 'Participante');
+    return op.set(`certificados/${novoId('ce')}`, {
+      userId: c.userId, nomeMembro: u ? u.nome : (c.nomeMembro || ''), cpf: '', papel, refKind,
+      refId: c.projetoId || c.aulaId || null, atividade: c.tipo === 'Estagio' ? 'Estágios supervisionados da LACMES' : (c.cargoTexto || ''),
+      cargoTexto: c.cargoTexto || '', cargaHoraria: Number(c.cargaHoraria) || 0, periodoInicio: c.periodoInicio || null, periodoFim: c.periodoFim || null,
+      status: 'solicitado', solicitadoPor: S.uid, criadoPor: S.uid, criadoEm: agora, historico: [registro('Solicitado')]
+    });
+  });
+  await Data.batch(ops);
+  const admins = Object.values(S.usuarios).filter(u => u.tipo === 'admin').map(u => u.id);
+  notificar({ tipo: 'certificado', pref: 'certificados', uids: admins, titulo: `${lista.length} certificado(s) solicitado(s)`, corpo: 'Aguardando a Presidência montar o lote.', url: '#/certificados/solicitacoes' });
+  return ops.length;
+}
+
+export async function criarLote({ ref, destinatarios, signatarios, modo, descartar = [] }) {
+  const agora = Date.now();
+  const loteId = novoId('lt');
+  const comuns = {
+    atividade: ref.atividade, refKind: ref.kind, refId: ref.id || null, data: ref.data || null,
+    periodoInicio: ref.periodoInicio || null, periodoFim: ref.periodoFim || null, local: ref.local || '',
+    signatarios: signatarios.map(s => ({ nome: s.nome, titulo: s.titulo, uid: s.uid || null })), loteId
+  };
+  const certs = destinatarios.map((d, i) => ({
+    ...comuns, id: novoId('ce'), userId: d.uid || null, nomeMembro: d.nome, cpf: soDigitos(d.cpf), papel: d.papel,
+    cargoTexto: d.cargoTexto || '', cargaHoraria: Number(d.ch) || 0, ordem: i, status: 'aguardando_assinatura', codigo: gerarCodigo(),
+    criadoPor: S.uid, criadoEm: agora, historico: [registro('Incluído no lote')]
+  }));
+  const ops = [
+    op.set(`lotesCert/${loteId}`, { ...comuns, modo, total: certs.length, criadoPor: S.uid, criadoEm: agora }),
+    ...certs.map(({ id, ...doc }) => op.set(`certificados/${id}`, doc)),
+    ...descartar.map(id => op.del(`certificados/${id}`))
+  ];
+  await Data.batch(ops);
+  return { loteId, certs };
+}
+
+export async function publicarVerificacao(c) {
+  await Data.set(`verificacoes/${c.codigo}`, {
+    nome: c.nomeMembro, cpf: mascararCPF(c.cpf), titulo: rotuloCert(c), cargaHoraria: c.cargaHoraria, emitidoEm: c.emitidoEm || Date.now(),
+    signatarios: (c.signatarios || []).map(s => `${s.nome} — ${s.titulo}`), status: 'valido'
+  });
+}
+
+export async function emitirCertificado(c, { arquivo = null, assinaturas = {} } = {}) {
+  const agora = Date.now();
+  const emitido = { ...c, emitidoEm: agora };
+  const blob = arquivo || await gerarPDFLote([emitido], { assinaturas });
+  const r = await anexarBlob(blob, `certificado-${c.codigo}.pdf`, { pasta: 'certificados', restrito: true, dono: c.userId || S.uid });
+  await Data.update(`certificados/${c.id}`, { status: 'emitido', pdfUrl: r.url, emitidoEm: agora, historico: F.arrayUnion(registro(arquivo ? 'PDF assinado enviado' : 'Emitido digitalmente')) });
+  await publicarVerificacao(emitido);
+  if (c.userId) notificar({ tipo: 'certificado', pref: 'certificados', uids: [c.userId], titulo: 'Seu certificado está disponível', corpo: rotuloCert(c), url: '#/certificados' });
+  return r.url;
+}
+
+export async function cancelarCertificado(c) {
+  await Data.update(`certificados/${c.id}`, { status: 'cancelado', historico: F.arrayUnion(registro('Cancelado')) });
+  if (c.codigo) await Data.set(`verificacoes/${c.codigo}`, { status: 'cancelado' }, { merge: true }).catch(() => { });
+}
+
+export async function removerLote(lote, certs) {
+  const ops = certs.filter(c => c.status !== 'emitido').map(c => op.del(`certificados/${c.id}`));
+  if (!certs.some(c => c.status === 'emitido')) ops.push(op.del(`lotesCert/${lote.id}`));
+  await Data.batch(ops);
+}
+
+async function carregarPdfLib() {
+  if (window.PDFLib) return window.PDFLib;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+    s.onload = res; s.onerror = () => rej(new Error('Não foi possível carregar o leitor de PDF. Verifique a internet.'));
+    document.head.appendChild(s);
+  });
+  return window.PDFLib;
+}
+
+export async function dividirPDF(file) {
+  const { PDFDocument } = await carregarPdfLib();
+  const origem = await PDFDocument.load(await file.arrayBuffer());
+  const blobs = [];
+  for (let i = 0; i < origem.getPageCount(); i++) {
+    const novo = await PDFDocument.create();
+    const [pagina] = await novo.copyPages(origem, [i]);
+    novo.addPage(pagina);
+    blobs.push(new Blob([await novo.save()], { type: 'application/pdf' }));
+  }
+  return blobs;
 }
 
 export function horasEstagio(uid) {
   return Object.values(S.oportunidades).filter(o => o.tipo === 'Estágio' && (o.confirmados || []).includes(uid) && (o.presencas ? o.presencas.includes(uid) : true)).reduce((s, o) => s + (o.cargaHoraria || 0), 0);
 }
+
 export function cargaTotal(uid) {
   let t = horasEstagio(uid);
   S.aulas.forEach(a => { if ((a.presentes || a.seguidores || []).includes(uid)) t += (a.cargaHoraria || 0); });
