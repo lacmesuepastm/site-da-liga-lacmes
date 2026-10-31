@@ -9,7 +9,7 @@ export const FIREBASE_CONFIG = {
 
 export const VAPID_KEY = "BFIcF85OaVS4_PHhM0fzyieona62WVyxLCcfmPzeMipP64LNdfVLNA2l0SZcerHGbPD_ArTqjS49OU5aJqO2s3w";
 
-export const WORKER_URL = "";
+export const WORKER_URL = "https://site-da-liga-lacmes.lacmes-uepa.workers.dev/";
 
 export const USAR_R2 = false;
 
