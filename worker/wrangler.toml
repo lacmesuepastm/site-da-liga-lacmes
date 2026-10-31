@@ -1,5 +1,5 @@
 # Cloudflare Worker da LACMES — veja README.md, seção "Cloudflare Worker"
-name = "lacmes-api"
+name = "site-da-liga-lacmes"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
 
