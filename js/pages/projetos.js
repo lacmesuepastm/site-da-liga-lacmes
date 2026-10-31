@@ -6,7 +6,7 @@ import { cabecalho, vazio, btn, btnIc, campo, linhaCampos, seletorPessoas, abas,
 import { ativarMencoes, mencionados, mencaoHTML } from '../editor.js';
 import { notificar } from '../notificar.js';
 import { criarCertificados } from '../cert.js';
-import { WORKER_URL } from '../config.js';
+import { USAR_R2 } from '../config.js';
 import { anexar, apagarAnexo, iconeArquivo, botaoAbrir, tipoDe, tamanho, LIMITE_LOCAL } from '../arquivos.js';
 
 const ABAS = [
@@ -242,7 +242,7 @@ function abaArquivos(p) {
 acao('novoArquivo', ({ pid }) => {
   const p = S.projetos[pid];
   abrirModal({ titulo: 'Adicionar arquivos', largura: 540, corpo: `
-  ${campo('Enviar do dispositivo (um ou vários)', '<input type="file" id="af-arquivo" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.zip,image/*">', `PDF, Word, Excel, PowerPoint, imagens… ${WORKER_URL ? 'Até 15 MB cada.' : `Até ${Math.round(LIMITE_LOCAL / 1024)} KB cada (para arquivos maiores use um link do Drive).`}`)}
+  ${campo('Enviar do dispositivo (um ou vários)', '<input type="file" id="af-arquivo" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.zip,image/*">', `PDF, Word, Excel, PowerPoint, imagens… ${USAR_R2 ? 'Até 15 MB cada.' : `Até ${Math.round(LIMITE_LOCAL / 1024)} KB cada (para arquivos maiores use um link do Drive).`}`)}
   <p class="ou"><span>ou</span></p>
   ${campo('Nome do link', '<input id="af-nome" placeholder="Ex.: TCLE assinado">')}${campo('Link (Drive, Docs, OneDrive…)', '<input id="af-url" placeholder="https://">')}
   ${campo('Citar pessoas ao anexar (opcional — elas são avisadas)', seletorPessoas('af-pessoas', (p.membros || []).map(m => m.uid).filter(u => u !== S.uid), []))}

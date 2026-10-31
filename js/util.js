@@ -1,5 +1,5 @@
 import { Data } from './data.js';
-import { WORKER_URL } from './config.js';
+import { WORKER_URL, USAR_R2 } from './config.js';
 
 const P = {
   home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
@@ -274,7 +274,7 @@ export async function enviarArquivo(file, pasta = 'geral', { imagemMax = 1400 } 
   const ehImagem = /^image\//.test(file.type);
   let corpo = file;
   if (ehImagem && file.type !== 'image/gif') corpo = await comprimirImagem(file, imagemMax);
-  if (WORKER_URL) {
+  if (WORKER_URL && USAR_R2) {
     const token = await Data.auth.token();
     const fd = new FormData();
     fd.append('arquivo', corpo, file.name.replace(/\.(png|webp|heic)$/i, '.jpg'));

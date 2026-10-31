@@ -16,11 +16,9 @@ PUBLIC_URL = ""
 [triggers]
 crons = ["0 21 * * *"]
 
-# Armazenamento de arquivos (imagens, PDFs, certificados) — crie com:
-#   npx wrangler r2 bucket create lacmes-arquivos
-[[r2_buckets]]
-binding = "ARQUIVOS"
-bucket_name = "lacmes-arquivos"
+# Armazenamento de arquivos (opcional): crie o bucket no painel (R2), descomente e ponha USAR_R2 = true em js/config.js
+# [[r2_buckets]]
+# binding = "ARQUIVOS"
+# bucket_name = "lacmes-arquivos"
 
-# Segredo obrigatório (NÃO coloque aqui):
-#   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT
+# Segredo obrigatório (NÃO coloque aqui): painel Cloudflare → Worker → Configurações → Variáveis e Segredos → FIREBASE_SERVICE_ACCOUNT

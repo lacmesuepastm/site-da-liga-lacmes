@@ -11,6 +11,8 @@ export const VAPID_KEY = "BFIcF85OaVS4_PHhM0fzyieona62WVyxLCcfmPzeMipP64LNdfVLNA
 
 export const WORKER_URL = "";
 
+export const USAR_R2 = false;
+
 export const SITE_URL = "https://lacmesuepastm.github.io/site-da-liga-lacmes";
 
 export const DEMO_MODE = !FIREBASE_CONFIG.apiKey || new URLSearchParams(location.search).has("demo");

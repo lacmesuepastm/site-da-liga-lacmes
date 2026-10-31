@@ -1,6 +1,6 @@
 import { Data } from './data.js';
 import { S } from './store.js';
-import { WORKER_URL } from './config.js';
+import { USAR_R2 } from './config.js';
 import { ic, esc, acao, comprimirImagem, blobParaDataURL, enviarArquivo, baixarBlob, toast } from './util.js';
 import { campo } from './ui.js';
 
@@ -43,7 +43,7 @@ export function botaoAbrir(url, nome, rotulo = 'Abrir') {
 }
 
 export async function anexar(file, { pasta = 'geral', restrito = false, dono = null } = {}) {
-  if (WORKER_URL) {
+  if (WORKER_URL && USAR_R2) {
     const url = await enviarArquivo(file, pasta);
     return { url, nome: file.name, tipo: file.type, tam: file.size };
   }
@@ -89,7 +89,7 @@ export async function apagarAnexo(url) {
   if (/^anexo:/.test(url || '')) await Data.del('anexos/' + url.slice(6)).catch(() => { });
 }
 
-export const camposArquivoOuLink = (p) => `${campo('Arquivo (PDF, Word, PowerPoint, Excel…)', `<input type="file" id="${p}-arquivo" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.zip,image/*">`, WORKER_URL ? 'Até 15 MB.' : `Até ${Math.round(LIMITE_LOCAL / 1024)} KB. Para arquivos maiores, use o link do Google Drive.`)}
+export const camposArquivoOuLink = (p) => `${campo('Arquivo (PDF, Word, PowerPoint, Excel…)', `<input type="file" id="${p}-arquivo" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.zip,image/*">`, USAR_R2 ? 'Até 15 MB.' : `Até ${Math.round(LIMITE_LOCAL / 1024)} KB. Para arquivos maiores, use o link do Google Drive.`)}
   <p class="ou"><span>ou link</span></p>
   ${campo('Link do Google Drive, Docs, Slides ou outro', `<input id="${p}-url" placeholder="https://docs.google.com/…">`)}`;
 
