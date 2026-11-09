@@ -3,7 +3,7 @@ import { S, nomeDe, usuariosAtivos } from '../store.js';
 import { P } from '../dominio.js';
 import { ic, esc, acao, abrirModal, fecharModal, confirmar, toast, val, opcoes, fmtDataHora, isoParaBR, hojeISO, baixarBlob, rerender } from '../util.js';
 import { cabecalho, vazio, btn, btnIc, campo, linhaCampos, abas, meta, seletorPessoas } from '../ui.js';
-import { STATUS, PAPEIS, REFS, rotuloCert, cpfValido, formatarCPF, mascararCPF, soDigitos, cpfDe, criarLote, emitirCertificado, cancelarCertificado, removerLote, dividirPDF, gerarPDFLote, previa, baixar, minhaAssinatura } from '../cert.js';
+import { STATUS, PAPEIS, REFS, ASSINANTES_RAPIDOS, LACMES_NOME, UEPA_NOME, rotuloCert, cpfValido, formatarCPF, mascararCPF, soDigitos, cpfDe, criarLote, emitirCertificado, cancelarCertificado, removerLote, dividirPDF, gerarPDFLote, previa, baixar, minhaAssinatura } from '../cert.js';
 
 export const resetarCacheAssinatura = () => { };
 
@@ -148,7 +148,10 @@ acao('lnExcluir', async ({ id }) => {
   if (!comEmitidos) location.hash = '#/certificados/lotes';
 });
 
+const baseDe = (kind) => (REFS[kind] || {}).base || kind;
+
 function itensDe(kind) {
+  kind = baseDe(kind);
   if (kind === 'aula') return S.aulas.map(a => ({ id: a.id, label: `${a.titulo} · ${isoParaBR(a.data)}` }));
   if (kind === 'evento') return S.eventosLiga.map(e => ({ id: e.id, label: `${e.titulo} · ${isoParaBR(e.data)}` }));
   if (kind === 'acao') return Object.values(S.oportunidades).filter(o => o.tipo !== 'Estágio').map(o => ({ id: o.id, label: `${o.titulo} (${o.tipo})` }));
@@ -158,6 +161,7 @@ function itensDe(kind) {
 }
 
 function dadosItem(kind, id) {
+  kind = baseDe(kind);
   if (kind === 'aula') { const a = S.aulas.find(x => x.id === id); return a && { atividade: a.titulo, data: a.data, local: a.local, ch: a.cargaHoraria }; }
   if (kind === 'evento') { const e = S.eventosLiga.find(x => x.id === id); return e && { atividade: e.titulo, data: e.data, local: e.local, ch: e.cargaHoraria }; }
   if (kind === 'acao' || kind === 'estagio') { const o = S.oportunidades[id]; return o && { atividade: o.titulo, data: o.data || '', local: o.local, ch: o.cargaHoraria }; }
@@ -166,6 +170,7 @@ function dadosItem(kind, id) {
 }
 
 function participantesDe(kind, id) {
+  kind = baseDe(kind);
   if (kind === 'aula') { const a = S.aulas.find(x => x.id === id); return a && { pessoas: (a.presentes || a.seguidores || []).map(uid => ({ uid, papel: 'Participante' })), docente: a.professor }; }
   if (kind === 'evento') { const e = S.eventosLiga.find(x => x.id === id); return e && { pessoas: (e.participantes || []).map(uid => ({ uid, papel: 'Participante' })), docente: e.docente }; }
   if (kind === 'acao') { const o = S.oportunidades[id]; return o && { pessoas: (o.confirmados || []).map(uid => ({ uid, papel: 'Participante' })), docente: o.orientador }; }
@@ -196,7 +201,7 @@ function sincronizarRows() {
 function sincronizarSigns() {
   document.querySelectorAll('#cw-signs .cw-sign').forEach(el => {
     const s = wiz.signs[Number(el.dataset.i)]; if (!s) return;
-    s.nome = el.querySelector('.cs-nome').value.trim(); s.titulo = el.querySelector('.cs-titulo').value.trim();
+    s.nome = el.querySelector('.cs-nome').value.trim(); s.titulo = el.querySelector('.cs-titulo').value.trim(); s.extra = el.querySelector('.cs-extra').value.trim();
   });
 }
 
@@ -218,6 +223,7 @@ function desenharSigns() {
   box.innerHTML = wiz.signs.map((s, i) => `<div class="cw-sign" data-i="${i}">
       <input class="cs-nome" value="${esc(s.nome)}" placeholder="Nome de quem assina">
       <input class="cs-titulo" value="${esc(s.titulo)}" placeholder="Título (ex.: Presidente da LACMES)">
+      <input class="cs-extra" value="${esc(s.extra || '')}" placeholder="Linha extra (ex.: Portaria N° 717/2026)">
       ${btnIc('x', 'cwRemSign', { i }, 'Remover')}</div>`).join('') || '<p class="mudo">Nenhum signatário. O certificado sai sem linhas de assinatura.</p>';
   const sug = sugestoesSign();
   const sel = document.getElementById('cw-sug');
@@ -241,13 +247,14 @@ async function adicionarPessoas(lista, kind) {
 }
 
 function formLote(ref = {}) {
-  const tipos = Object.entries(REFS).map(([v, o]) => ({ v, t: o.rot }));
+  const tipos = Object.entries(REFS).filter(([v, o]) => !o.oculto || v === ref.kind).map(([v, o]) => ({ v, t: o.rot }));
   return `<div class="bloco-form"><div class="bf-cab"><h5>${ic('pasta')} 1. Atividade</h5></div>
       ${linhaCampos(campo('Tipo', `<select id="cw-kind" data-change="cwKind">${opcoes(tipos, ref.kind || 'livre')}</select>`),
         `<div id="cw-item-wrap">${campo('Escolher do sistema (opcional)', '<select id="cw-item" data-change="cwItem"></select>')}</div>`)}
       ${campo('Nome da atividade (como aparece no certificado)', `<input id="cw-atividade" value="${esc(ref.atividade || '')}" placeholder="Ex.: Simpósio de Cardiologia">`)}
       ${linhaCampos(campo('Data', `<input type="date" id="cw-data" value="${esc(ref.data || '')}">`), campo('ou período — início', '<input type="date" id="cw-ini">'), campo('fim', '<input type="date" id="cw-fim">'))}
       ${linhaCampos(campo('Local', `<input id="cw-local" value="${esc(ref.local || '')}">`), campo('Carga horária padrão (h)', `<input type="number" id="cw-ch" min="0" step="0.5" value="${ref.ch || ''}">`))}
+      ${campo('Outras entidades promotoras (opcional)', `<input id="cw-entidades" value="${esc((ref.entidades || []).join('; '))}" placeholder="Ex.: Liga Acadêmica de Pediatria (LAPED); Centro Acadêmico de Medicina">`, `O texto sai: "promovida pela ${LACMES_NOME}, [suas entidades] e a ${UEPA_NOME}". Separe várias com ponto e vírgula.`)}
     </div>
     <div class="bloco-form"><div class="bf-cab"><h5>${ic('usuarios')} 2. Quem recebe (<span id="cw-total">0</span>)</h5>
       <button type="button" class="link" data-action="cwSugerir">sugerir pela atividade escolhida</button></div>
@@ -263,6 +270,7 @@ function formLote(ref = {}) {
       <div id="cw-rows"></div></div>
     <div class="bloco-form"><div class="bf-cab"><h5>${ic('caneta')} 3. Quem assina</h5></div>
       <p class="dica">O nome e o título aparecem embaixo da linha de assinatura de cada certificado.</p>
+      <div class="acoes-linha esq" style="margin:0 0 8px">${ASSINANTES_RAPIDOS.map((s, i) => btn(s.nome, 'cwRapido', { classe: 'btn-peq', icone: 'mais', dados: { i } })).join('')}</div>
       <div id="cw-signs"></div>
       <div class="acoes-linha esq"><select id="cw-sug" data-change="cwSug" style="height:34px;border:1px solid var(--line-2);border-radius:8px;padding:0 8px;max-width:100%"></select>${btn('Em branco', 'cwAddSign', { classe: 'btn-peq', icone: 'mais' })}</div></div>
     <div class="acoes-form">${btn('Cancelar', 'fecharModal')}
@@ -298,7 +306,7 @@ acao('novoLoteSel', () => {
   const certs = ids.map(id => S.certificados.find(c => c.id === id)).filter(Boolean);
   const c0 = certs[0];
   abrirLote({
-    ref: { kind: c0.refKind, id: c0.refId, atividade: c0.atividade, ch: c0.cargaHoraria, ...(dadosItem(c0.refKind, c0.refId) || { }) },
+    ref: { kind: c0.refKind, id: c0.refId, atividade: c0.atividade, ch: c0.cargaHoraria, entidades: c0.entidades || [], ...(dadosItem(c0.refKind, c0.refId) || { }) },
     rows: certs.map(c => ({ uid: c.userId, nome: c.nomeMembro, cpf: c.cpf || '', papel: c.papel || 'Participante', cargoTexto: c.cargoTexto || '', ch: c.cargaHoraria })),
     descartar: ids
   });
@@ -352,6 +360,14 @@ acao('cwSug', (d, el) => {
   else if (wiz.signs.length >= 4) toast('No máximo 4 signatários.', 'erro');
   desenharSigns();
 });
+acao('cwRapido', ({ i }) => {
+  sincronizarSigns();
+  const s = ASSINANTES_RAPIDOS[Number(i)];
+  if (!s || wiz.signs.some(x => x.nome === s.nome)) return;
+  if (wiz.signs.length >= 4) { toast('No máximo 4 signatários.', 'erro'); return; }
+  wiz.signs.push({ ...s, uid: null });
+  desenharSigns();
+});
 acao('cwAddSign', () => { sincronizarSigns(); if (wiz.signs.length >= 4) { toast('No máximo 4 signatários.', 'erro'); return; } wiz.signs.push({ nome: '', titulo: '', uid: null }); desenharSigns(); });
 acao('cwRemSign', ({ i }) => { sincronizarSigns(); wiz.signs.splice(Number(i), 1); desenharSigns(); });
 
@@ -381,7 +397,7 @@ acao('cwSalvar', async ({ modo }, botao) => {
   }
   botao.disabled = true;
   try {
-    const ref = { kind, id: wiz.refId, atividade, data: val('cw-data') || null, periodoInicio: val('cw-ini') || null, periodoFim: val('cw-fim') || null, local: val('cw-local') };
+    const ref = { kind, id: wiz.refId, atividade, data: val('cw-data') || null, periodoInicio: val('cw-ini') || null, periodoFim: val('cw-fim') || null, local: val('cw-local'), entidades: val('cw-entidades').split(/[;\n]/).map(s => s.trim()).filter(Boolean) };
     const { loteId, certs } = await criarLote({ ref, destinatarios: dest, signatarios: signs, modo, descartar: wiz.descartar });
     await Promise.all(dest.filter(d => d.uid && d.cpf).map(d => Data.set(`dadosPessoais/${d.uid}`, { cpf: d.cpf }, { merge: true }).catch(() => { })));
     if (modo === 'papel') {
