@@ -15,14 +15,26 @@ export const STATUS = {
 export const PAPEIS = ['Participante', 'Palestrante', 'Organizador(a)', 'Monitor(a)', 'Coordenador(a)', 'Membro da LACMES', 'Diretor(a) da LACMES'];
 
 export const REFS = {
-  aula: { rot: 'Aula', de: 'da aula', em: 'na aula', por: 'promovida pela' },
-  evento: { rot: 'Evento ou reunião', de: 'do evento', em: 'no evento', por: 'promovido pela' },
-  acao: { rot: 'Ação, extensão ou pesquisa', de: 'da ação', em: 'na ação', por: 'promovida pela' },
-  projeto: { rot: 'Projeto', de: 'do projeto', em: 'no projeto', por: 'desenvolvido no âmbito da' },
-  estagio: { rot: 'Estágio', de: 'do estágio', em: 'no estágio', por: 'promovido pela' },
-  livre: { rot: 'Atividade livre', de: 'da atividade', em: 'na atividade', por: 'promovida pela' },
-  membro: { rot: 'Membro ou diretoria', de: '', em: '', por: '' }
+  aula_aberta: { rot: 'Aula aberta', de: 'da aula aberta', em: 'na aula aberta', verbo: 'promovida', real: 'realizada', base: 'aula' },
+  aula_fechada: { rot: 'Aula fechada (só membros)', de: 'da aula', em: 'na aula', verbo: 'promovida', real: 'realizada', base: 'aula' },
+  extensao: { rot: 'Atividade de extensão', de: 'da atividade de extensão', em: 'na atividade de extensão', verbo: 'promovida', real: 'realizada', base: 'acao' },
+  pesquisa: { rot: 'Projeto de pesquisa', de: 'do projeto de pesquisa', em: 'no projeto de pesquisa', verbo: 'desenvolvido', real: 'realizado', base: 'projeto' },
+  projeto: { rot: 'Projeto', de: 'do projeto', em: 'no projeto', verbo: 'desenvolvido', real: 'realizado', base: 'projeto' },
+  evento: { rot: 'Evento ou reunião', de: 'do evento', em: 'no evento', verbo: 'promovido', real: 'realizado', base: 'evento' },
+  estagio: { rot: 'Estágio', de: 'do estágio', em: 'no estágio', verbo: 'promovido', real: 'realizado', base: 'estagio' },
+  livre: { rot: 'Atividade livre', de: 'da atividade', em: 'na atividade', verbo: 'promovida', real: 'realizada', base: 'livre' },
+  membro: { rot: 'Membro ou diretoria', de: '', em: '', verbo: '', real: '', base: 'membro' },
+  aula: { rot: 'Aula', de: 'da aula', em: 'na aula', verbo: 'promovida', real: 'realizada', base: 'aula', oculto: true },
+  acao: { rot: 'Ação', de: 'da atividade', em: 'na atividade', verbo: 'promovida', real: 'realizada', base: 'acao', oculto: true }
 };
+
+export const LACMES_NOME = 'Liga Acadêmica de Clínica Médica de Santarém (LACMES)';
+export const UEPA_NOME = 'Universidade do Estado do Pará, Campus de Santarém';
+
+export const ASSINANTES_RAPIDOS = [
+  { nome: 'Prof° John Henry de Oliveira Vale', titulo: 'Coordenador do Campus XII - Santarém', extra: 'Portaria N° 717/2026' },
+  { nome: 'Profª Simone Aguiar da Silva Figueira', titulo: 'Representante da Pró Reitoria de Extensão no Campus de Santarém', extra: 'Portaria N° 4458/2026' }
+];
 
 const ALFA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const gerarCodigo = () => 'LAC-' + [4, 4].map(n => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => ALFA[b % ALFA.length]).join('')).join('-');
@@ -56,7 +68,7 @@ const fmtNum = (n) => String(Number(n) || 0).replace('.', ',');
 const papelMin = (p) => String(p || '').toLowerCase();
 
 function dataTexto(c) {
-  if (c.data) { const d = dataDeISO(c.data); return `${d.getDate()} de ${MESES[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; }
+  if (c.data) { const d = dataDeISO(c.data); return `${String(d.getDate()).padStart(2, '0')} de ${MESES[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; }
   const i = isoParaBR(c.periodoInicio), f = isoParaBR(c.periodoFim);
   if (i && f) return `${i} a ${f}`;
   if (i) return `a partir de ${i}`;
@@ -64,20 +76,33 @@ function dataTexto(c) {
   return '';
 }
 
+function promotores(c) {
+  const itens = [LACMES_NOME, ...(c.entidades || []).map(s => String(s).trim()).filter(Boolean), `a ${UEPA_NOME}`];
+  return itens.length > 1 ? `${itens.slice(0, -1).join(', ')} e ${itens[itens.length - 1]}` : itens[0];
+}
+
+function quando(c, ref) {
+  if (c.data) return `, ${ref.real} no dia ${dataTexto(c)}`;
+  const i = isoParaBR(c.periodoInicio), f = isoParaBR(c.periodoFim);
+  if (i && f) return `, ${ref.real} no período de ${i} a ${f}`;
+  return '';
+}
+
 function trechos(c) {
   const ref = REFS[c.refKind] || REFS.livre;
-  const L = ['Liga Acadêmica de Clínica Médica de Santarém (LACMES)', false];
+  const cpf = soDigitos(c.cpf).length === 11 ? `, CPF ${formatarCPF(c.cpf)},` : '';
+  const abre = [['Certificamos que ', 0], [String(c.nomeMembro || '').toUpperCase(), true], [`${cpf} `, 0]];
   const CH = [`${fmtNum(c.cargaHoraria)} ${Number(c.cargaHoraria) === 1 ? 'hora' : 'horas'}`, true];
-  const fim = [[', com carga horária de ', 0], CH, ['.', 0]];
+  const fim = [[', com CH de ', 0], CH, ['.', 0]];
   if (c.refKind === 'membro') {
     const funcao = c.papel === 'Diretor(a) da LACMES' ? (c.cargoTexto || 'diretor(a)') : 'membro';
     const per = dataTexto(c);
-    return [['atuou como ', 0], [funcao, true], [' da ', 0], L, [per ? `, no período de ${per}` : '', 0], ...fim];
+    return [...abre, ['atuou como ', 0], [funcao, true], [` da ${LACMES_NOME}, vinculada à ${UEPA_NOME}`, 0], [per ? `, no período de ${per}` : '', 0], ...fim];
   }
   const inicio = (!c.papel || c.papel === 'Participante')
     ? [[`participou ${ref.de} `, 0]]
     : [['atuou como ', 0], [papelMin(c.papel), true], [` ${ref.em} `, 0]];
-  return [...inicio, [c.atividade || '', true], [`, ${ref.por} `, 0], L, ...fim];
+  return [...abre, ...inicio, [`“${c.atividade || ''}”`, true], [`, ${ref.verbo} pela ${promotores(c)}${quando(c, ref)}`, 0], ...fim];
 }
 
 let logoCache = null;
@@ -86,6 +111,16 @@ async function logoDataURL() {
   const r = await fetch('assets/logo-lacmes.png');
   logoCache = await blobParaDataURL(await r.blob());
   return logoCache;
+}
+
+let uepaCache;
+async function logoUepaDataURL() {
+  if (uepaCache !== undefined) return uepaCache;
+  try {
+    const r = await fetch('assets/logo-uepa.png');
+    uepaCache = r.ok && /image/.test(r.headers.get('content-type') || '') ? await blobParaDataURL(await r.blob()) : null;
+  } catch { uepaCache = null; }
+  return uepaCache;
 }
 
 async function esperarJsPDF() {
@@ -116,33 +151,63 @@ function iconeLocal(doc, x, y, s) {
   doc.circle(x + s / 2, y + s * 0.36, s * 0.1, 'S');
 }
 
-function textoRico(doc, partes, xCentro, y, larguraMax, tam, entre) {
+function palavrasDe(partes) {
   const palavras = [];
-  partes.forEach(([t, b]) => String(t).split(/(\s+)/).forEach(w => { if (w) palavras.push({ w, b: !!b }); }));
-  const medir = (p) => { doc.setFont('times', p.b ? 'bold' : 'normal'); doc.setFontSize(tam); return doc.getTextWidth(p.w); };
-  const linhas = []; let atual = [], larg = 0;
-  palavras.forEach(p => {
-    const lw = medir(p);
-    if (larg + lw > larguraMax && atual.length && !/^\s+$/.test(p.w)) { linhas.push(atual); atual = []; larg = 0; }
-    if (!atual.length && /^\s+$/.test(p.w)) return;
-    atual.push({ ...p, lw }); larg += lw;
-  });
-  if (atual.length) linhas.push(atual);
-  linhas.forEach((l, i) => {
-    while (l.length && /^\s+$/.test(l[l.length - 1].w)) l.pop();
-    const total = l.reduce((s, p) => s + p.lw, 0);
-    let x = xCentro - total / 2;
-    l.forEach(p => {
-      doc.setFont('times', p.b ? 'bold' : 'normal');
-      doc.setTextColor(...(p.b ? AZUL : TEXTO));
-      doc.text(p.w, x, y + i * entre);
-      x += p.lw;
+  let espaco = false;
+  partes.forEach(([t, b]) => {
+    String(t).split(/(\s+)/).forEach(p => {
+      if (!p) return;
+      if (/^\s+$/.test(p)) { espaco = true; return; }
+      if (espaco || !palavras.length) palavras.push([{ t: p, b: !!b }]);
+      else palavras[palavras.length - 1].push({ t: p, b: !!b });
+      espaco = false;
     });
   });
-  return linhas.length;
+  return palavras;
 }
 
-function desenharPagina(doc, c, { logo, assinaturas }) {
+function quebrarParagrafo(doc, palavras, tam, larg, recuo) {
+  doc.setFontSize(tam);
+  doc.setFont('times', 'normal');
+  const espaco = doc.getTextWidth(' ');
+  const medidas = palavras.map(p => p.map(f => { doc.setFont('times', f.b ? 'bold' : 'normal'); return { ...f, w: doc.getTextWidth(f.t) }; }));
+  const linhas = [];
+  let atual = [], soma = 0;
+  medidas.forEach(p => {
+    const w = p.reduce((s, f) => s + f.w, 0);
+    const disponivel = larg - (linhas.length ? 0 : recuo);
+    if (atual.length && soma + espaco * atual.length + w > disponivel) { linhas.push({ palavras: atual, soma }); atual = []; soma = 0; }
+    atual.push({ frags: p, w }); soma += w;
+  });
+  if (atual.length) linhas.push({ palavras: atual, soma });
+  return { linhas, espaco };
+}
+
+function paragrafoJustificado(doc, partes, x0, y, larg, entre, recuo) {
+  const palavras = palavrasDe(partes);
+  let tam = 15, q = quebrarParagrafo(doc, palavras, tam, larg, recuo);
+  while (q.linhas.length > 6 && tam > 12) { tam -= 0.5; q = quebrarParagrafo(doc, palavras, tam, larg, recuo); }
+  const passo = entre * tam / 15;
+  q.linhas.forEach((l, i) => {
+    const ultima = i === q.linhas.length - 1;
+    const disponivel = larg - (i ? 0 : recuo);
+    const folga = l.palavras.length > 1 && !ultima ? (disponivel - l.soma) / (l.palavras.length - 1) : q.espaco;
+    let x = x0 + (i ? 0 : recuo);
+    l.palavras.forEach(p => {
+      p.frags.forEach(f => {
+        doc.setFont('times', f.b ? 'bold' : 'normal');
+        doc.setFontSize(tam);
+        doc.setTextColor(...(f.b ? AZUL : TEXTO));
+        doc.text(f.t, x, y + i * passo);
+        x += f.w;
+      });
+      x += folga;
+    });
+  });
+  return { linhas: q.linhas.length, yFim: y + (q.linhas.length - 1) * passo };
+}
+
+function desenharPagina(doc, c, { logo, logoUepa, assinaturas }) {
   const W = 297, H = 210;
   doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, H, 'F');
 
@@ -158,6 +223,12 @@ function desenharPagina(doc, c, { logo, assinaturas }) {
   [[11, 11], [W - 11, 11], [11, H - 11], [W - 11, H - 11]].forEach(([x, y]) => doc.rect(x - 1.4, y - 1.4, 2.8, 2.8, 'F'));
 
   doc.addImage(logo, 'PNG', W / 2 - 13, 15, 26, 26);
+  if (logoUepa) {
+    try {
+      const p = doc.getImageProperties(logoUepa), k = Math.min(40 / p.width, 20 / p.height);
+      doc.addImage(logoUepa, 'PNG', 17, 16, p.width * k, p.height * k);
+    } catch { }
+  }
   doc.setDrawColor(...AMARELO); doc.setLineWidth(0.35);
   doc.line(52, 28, W / 2 - 20, 28); doc.line(W / 2 + 20, 28, W - 52, 28);
   doc.setFillColor(...AMARELO); losango(doc, W / 2 - 24, 28, 1.3); losango(doc, W / 2 + 24, 28, 1.3);
@@ -166,25 +237,13 @@ function desenharPagina(doc, c, { logo, assinaturas }) {
   textoEspacado(doc, 'CERTIFICADO', W / 2, 58, 4);
   doc.setFont('times', 'normal'); doc.setFontSize(10.5); doc.setTextColor(...AZUL);
   textoEspacado(doc, 'LIGA ACADÊMICA DE CLÍNICA MÉDICA DE SANTARÉM', W / 2, 65, 1.4);
+  doc.setFontSize(8.5); doc.setTextColor(...CINZA);
+  textoEspacado(doc, 'UNIVERSIDADE DO ESTADO DO PARÁ  ·  CAMPUS DE SANTARÉM', W / 2, 70.5, 1);
 
-  doc.setFont('times', 'italic'); doc.setFontSize(14); doc.setTextColor(...CINZA);
-  doc.text('Certificamos que', W / 2, 80, { align: 'center' });
-
-  let tamNome = 25;
-  doc.setFont('times', 'bold');
-  while (tamNome > 14) { doc.setFontSize(tamNome); if (doc.getTextWidth(c.nomeMembro || '') <= 215) break; tamNome -= 1; }
-  doc.setFontSize(tamNome); doc.setTextColor(...AZUL);
-  doc.text(c.nomeMembro || '', W / 2, 92, { align: 'center' });
-  const larguraNome = Math.min(doc.getTextWidth(c.nomeMembro || '') + 16, 240);
-  doc.setDrawColor(...AMARELO); doc.setLineWidth(0.5); doc.line(W / 2 - larguraNome / 2, 95.5, W / 2 + larguraNome / 2, 95.5);
-
-  let y = 104;
-  if (soDigitos(c.cpf).length === 11) {
-    doc.setFont('times', 'normal'); doc.setFontSize(11.5); doc.setTextColor(...CINZA);
-    doc.text(`CPF ${formatarCPF(c.cpf)}`, W / 2, y, { align: 'center' });
-    y += 2;
-  }
-  textoRico(doc, trechos(c), W / 2, y + 10, 205, 14.5, 7.6);
+  const emitido = new Date(c.emitidoEm || Date.now());
+  const par = paragrafoJustificado(doc, trechos(c), 34, 86, 229, 8.4, 14);
+  doc.setFont('times', 'normal'); doc.setFontSize(13); doc.setTextColor(...TEXTO);
+  doc.text(`Santarém, ${emitido.getDate()} de ${MESES[emitido.getMonth()].toLowerCase()} de ${emitido.getFullYear()}.`, 263, par.yFim + 12, { align: 'right' });
 
   const itens = [];
   const dt = dataTexto(c);
@@ -195,7 +254,7 @@ function desenharPagina(doc, c, { logo, assinaturas }) {
   const tam = 4.6, folga = 2.2, entre = 14;
   const larguras = itens.map(i => tam + folga + doc.getTextWidth(i.texto));
   let x = W / 2 - (larguras.reduce((a, b) => a + b, 0) + entre * (itens.length - 1)) / 2;
-  const yi = 146;
+  const yi = Math.max(par.yFim + 24, 146);
   doc.setDrawColor(...AZUL); doc.setLineWidth(0.35); doc.setTextColor(...TEXTO);
   itens.forEach((item, i) => { item.icone(doc, x, yi - 3.6, tam); doc.text(item.texto, x + tam + folga, yi); x += larguras[i] + entre; });
 
@@ -211,13 +270,12 @@ function desenharPagina(doc, c, { logo, assinaturas }) {
       doc.setFont('times', 'bold'); doc.setFontSize(11); doc.setTextColor(...TEXTO);
       doc.text(doc.splitTextToSize(s.nome || '', lw + 8).slice(0, 2), cx, 176, { align: 'center' });
       doc.setFont('times', 'italic'); doc.setFontSize(9.5); doc.setTextColor(...CINZA);
-      doc.text(doc.splitTextToSize(s.titulo || '', lw + 8).slice(0, 2), cx, 181, { align: 'center' });
+      const titulo = doc.splitTextToSize(s.titulo || '', lw + 8).slice(0, 2);
+      doc.text(titulo, cx, 181, { align: 'center' });
+      if (s.extra) { doc.text(s.extra, cx, 181 + titulo.length * 4.4, { align: 'center' }); }
     });
   }
 
-  const emitido = new Date(c.emitidoEm || Date.now());
-  doc.setFont('times', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...CINZA);
-  doc.text(`Santarém-PA, ${emitido.getDate()} de ${MESES[emitido.getMonth()].toLowerCase()} de ${emitido.getFullYear()}`, W / 2, 191, { align: 'center' });
   desenharQR(doc, `${SITE_URL}/verificar.html?c=${c.codigo}`, 17, 183, 14);
   doc.setFont('times', 'normal'); doc.setFontSize(8); doc.setTextColor(...CINZA);
   doc.text('Verifique a autenticidade', 34, 187.5);
@@ -243,8 +301,9 @@ function textoEspacado(doc, texto, xCentro, y, espaco) {
 export async function gerarPDFLote(certs, { assinaturas = {} } = {}) {
   const jsPDF = await esperarJsPDF();
   const logo = await logoDataURL();
+  const logoUepa = await logoUepaDataURL();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  certs.forEach((c, i) => { if (i) doc.addPage(); desenharPagina(doc, c, { logo, assinaturas }); });
+  certs.forEach((c, i) => { if (i) doc.addPage(); desenharPagina(doc, c, { logo, logoUepa, assinaturas }); });
   doc.setProperties({ title: certs.length === 1 ? `Certificado — ${certs[0].nomeMembro}` : `Certificados — ${certs[0] ? certs[0].atividade : ''}`, author: 'LACMES' });
   return doc.output('blob');
 }
@@ -295,7 +354,7 @@ export async function criarLote({ ref, destinatarios, signatarios, modo, descart
   const comuns = {
     atividade: ref.atividade, refKind: ref.kind, refId: ref.id || null, data: ref.data || null,
     periodoInicio: ref.periodoInicio || null, periodoFim: ref.periodoFim || null, local: ref.local || '',
-    signatarios: signatarios.map(s => ({ nome: s.nome, titulo: s.titulo, uid: s.uid || null })), loteId
+    signatarios: signatarios.map(s => ({ nome: s.nome, titulo: s.titulo, extra: s.extra || '', uid: s.uid || null })), entidades: (ref.entidades || []).map(s => String(s).trim()).filter(Boolean), loteId
   };
   const certs = destinatarios.map((d, i) => ({
     ...comuns, id: novoId('ce'), userId: d.uid || null, nomeMembro: d.nome, cpf: soDigitos(d.cpf), papel: d.papel,
