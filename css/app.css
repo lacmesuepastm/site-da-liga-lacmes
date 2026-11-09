@@ -718,7 +718,7 @@ a.linha-item:hover { background: var(--hover); }
 .cw-row input:focus, .cw-row select:focus, .cw-sign input:focus { border-color: var(--accent); }
 .cw-row input[readonly] { background: var(--hover); }
 .cw-row input.invalido { border-color: var(--danger); color: var(--danger); }
-.cw-sign { display: grid; grid-template-columns: 1fr 1.2fr 32px; gap: 6px; margin-bottom: 6px; align-items: center; }
+.cw-sign { display: grid; grid-template-columns: 1fr 1.2fr 1fr 32px; gap: 6px; margin-bottom: 6px; align-items: center; }
 .cw-det { border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 12px; margin-bottom: 10px; }
 .cw-det summary { cursor: pointer; font-weight: 500; font-size: 13px; display: flex; align-items: center; gap: 6px; }
 .cw-det[open] summary { margin-bottom: 10px; }
@@ -733,4 +733,5 @@ a.linha-item:hover { background: var(--hover); }
   .cw-row .cw-nome { grid-column: 1 / -1; }
   .cw-sign { grid-template-columns: 1fr 32px; }
   .cw-sign .cs-titulo { grid-column: 1 / -1; grid-row: 2; }
+  .cw-sign .cs-extra { grid-column: 1 / -1; grid-row: 3; }
 }
